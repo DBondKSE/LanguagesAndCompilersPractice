@@ -1,4 +1,2 @@
-int x
-int x
-x := 1
+i32 x{5
 exit x

@@ -1,6 +1,6 @@
 ; ModuleID = 'practice1'
 source_filename = "practice1"
-target triple = "aarch64-unknown-linux-gnu"
+target triple = "arm64-apple-darwin25.6.0"
 
 @0 = private unnamed_addr constant [29 x i8] c"Program exit with result %d\0A\00", align 1
 
