@@ -1,0 +1,7 @@
+int a
+int b
+int c
+a:=7
+b:=a*3
+c := b - 1
+exit c

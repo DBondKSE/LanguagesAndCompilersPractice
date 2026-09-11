@@ -1,0 +1,1 @@
+clang++ $(llvm-config --cxxflags) compiler.cpp $(llvm-config --ldflags --libs core) -o compiler

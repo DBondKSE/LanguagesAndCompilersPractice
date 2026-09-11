@@ -1,0 +1,4 @@
+int x
+x := 5
+y := x + 1
+exit y
