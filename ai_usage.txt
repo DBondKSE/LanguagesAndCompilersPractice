@@ -1,11 +1,7 @@
-Some AI used: 
-- questions {
-    Is tokenize() the lexer in this compiler?
-
-    Ive started changing the tokenizer, continue
-
-    Fix compiler.cpp:217:30: error: no viable conversion from 'Triple' to 'StringRef'
-        217 |   theModule->setTargetTriple(Triple(sys::getDefaultTargetTriple()));
-
-    why doesnt my input.txt work
-}
+Claude Code / Opus 5 used. Prompts:
+1. Should ident and number have definitions in EBNF?
+2. Check if task 1 is implemented correctly and according to the file [w03-practice.pdf attached]
+3. Can you move the cpp files to src/ and separate functionality into multiple files? Lexer, Parser etc get their own files, and compiler.cpp only has main
+4. Clear git from .o, .ll, .bin files
+5. Check the task 2, is it completed according to the EBNF from task 1?
+6. Write test cases according to task 4 requirements

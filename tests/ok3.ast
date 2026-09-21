@@ -1,0 +1,9 @@
+Program
+  Decl total_2 mut
+    Const 1
+  Assign total_2
+    BinOp +
+      Var total_2
+      Const 41
+  Exit
+    Var total_2
