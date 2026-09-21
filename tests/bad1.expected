@@ -1,1 +1,1 @@
-compilation error: line 3: undeclared variable 'y'
+compilation error: line 2:8: unexpected byte '$'

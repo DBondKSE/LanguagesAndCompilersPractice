@@ -1,7 +1,5 @@
-int a
-int b
-int c
-a:=7
-b:=a*3
-c := b - 1
-exit c
+i32 a{7}
+i32 mut b{a}
+b := b - 2
+b := a * b
+exit 42

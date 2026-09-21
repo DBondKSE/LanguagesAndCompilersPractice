@@ -6,14 +6,21 @@ target triple = "aarch64-unknown-linux-gnu"
 
 define i32 @main() {
 entry:
-  %x = alloca i32, align 4
-  %y = alloca i32, align 4
-  store i32 5, ptr %x, align 4
-  %x.val = load i32, ptr %x, align 4
-  %add = add i32 %x.val, 3
-  store i32 %add, ptr %y, align 4
-  %y.val = load i32, ptr %y, align 4
-  %0 = call i32 (ptr, ...) @printf(ptr @0, i32 %y.val)
+  %f = alloca i32, align 4
+  store i32 67, ptr %f, align 4
+  %a = alloca i32, align 4
+  store i32 6, ptr %a, align 4
+  %b = alloca i32, align 4
+  store i32 7, ptr %b, align 4
+  %a1 = load i32, ptr %a, align 4
+  %mul = mul i32 10, %a1
+  store i32 %mul, ptr %b, align 4
+  %f2 = load i32, ptr %f, align 4
+  %b3 = load i32, ptr %b, align 4
+  %sub = sub i32 %f2, %b3
+  store i32 %sub, ptr %b, align 4
+  %b4 = load i32, ptr %b, align 4
+  %0 = call i32 (ptr, ...) @printf(ptr @0, i32 %b4)
   ret i32 0
 }
 

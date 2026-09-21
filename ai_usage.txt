@@ -1,0 +1,11 @@
+Some AI used: 
+- questions {
+    Is tokenize() the lexer in this compiler?
+
+    Ive started changing the tokenizer, continue
+
+    Fix compiler.cpp:217:30: error: no viable conversion from 'Triple' to 'StringRef'
+        217 |   theModule->setTargetTriple(Triple(sys::getDefaultTargetTriple()));
+
+    why doesnt my input.txt work
+}
