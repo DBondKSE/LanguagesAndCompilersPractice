@@ -1,0 +1,11 @@
+Program
+  Decl i32x const
+    Const 1
+  Decl mutable const
+    Const 2
+  Decl exit_code const
+    BinOp +
+      Var i32x
+      Var mutable
+  Exit
+    Var exit_code
