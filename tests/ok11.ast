@@ -1,0 +1,19 @@
+Program
+  Decl two const
+    Const 2
+  Decl y mut
+    Const 1
+  Assign y
+    BinOp +
+      BinOp -
+        BinOp -
+          BinOp *
+            BinOp *
+              Var y
+              Var two
+            Const 3
+          Const 4
+        Const 1
+      Const 10
+  Exit
+    Var y

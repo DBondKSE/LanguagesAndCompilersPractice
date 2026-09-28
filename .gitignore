@@ -1,3 +1,10 @@
+tests/*.o
+tests/*.bin
+tests/*.ll
 *.o
 *.pdf
 *.bin
+*.ll
+program
+test
+compiler

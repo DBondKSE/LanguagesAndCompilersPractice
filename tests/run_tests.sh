@@ -1,32 +1,27 @@
 #!/bin/bash
 cd "$(dirname "$0")/.." || exit 1
 
-clang++ $(llvm-config --cxxflags) compiler.cpp $(llvm-config --ldflags --libs core) -o compiler || exit 1
+clang++ $(llvm-config --cxxflags) src/*.cpp $(llvm-config --ldflags --libs core) -o compiler || exit 1
 
 pass=0
 fail=0
 
 for src in tests/ok*.txt; do
   name=${src%.txt}
-  rm -f "$name.ll" "$name.o" "$name.bin"
+  rm -f "$name.ll"
 
+  if [ -f "$name.ast" ] && [ "$(./compiler --ast "$src")" != "$(cat "$name.ast")" ]; then
+    echo "FAIL $src: --ast differs from $name.ast"
+    fail=$((fail + 1))
+    continue
+  fi
   if ! ./compiler "$src" "$name.ll"; then
     echo "FAIL $src: compiler exited non-zero"
     fail=$((fail + 1))
     continue
   fi
-  if ! llc -filetype=obj -relocation-model=pic "$name.ll" -o "$name.o"; then
-    echo "FAIL $src: llc rejected the IR"
-    fail=$((fail + 1))
-    continue
-  fi
-  if ! clang -fPIE "$name.o" -o "$name.bin"; then
-    echo "FAIL $src: link failed"
-    fail=$((fail + 1))
-    continue
-  fi
 
-  got=$("$name.bin")
+  got=$(lli "$name.ll")
   want=$(cat "$name.expected")
   if [ "$got" = "$want" ]; then
     echo "ok   $src -> $got"

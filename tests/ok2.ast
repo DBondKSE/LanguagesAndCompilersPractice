@@ -1,0 +1,15 @@
+Program
+  Decl a const
+    Const 7
+  Decl b mut
+    Var a
+  Assign b
+    BinOp -
+      Var b
+      Const 2
+  Assign b
+    BinOp *
+      Var a
+      Var b
+  Exit
+    Const 42
