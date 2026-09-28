@@ -1,9 +1,9 @@
 Program
-  Decl n const
+  Decl n i32 const
     BinOp -
       Const 3
       Const 10
-  Decl m mut
+  Decl m i32 mut
     BinOp *
       Var n
       Var n

@@ -1,0 +1,33 @@
+Program
+  Decl b bool const
+    Bool true
+  Decl x i32 const
+    BinOp +
+      Const 1
+      Const 1
+  Decl c bool const
+    BinOp ==
+      Var b
+      Bool false
+  Decl d bool const
+    BinOp !=
+      Var x
+      Const 1
+  Decl big i64 const
+    Const 3000000000
+  Decl max i64 const
+    Const 9223372036854775807
+  Decl y i64 mut
+    Const 0
+  Assign y
+    Var x
+  Decl e bool const
+    BinOp !=
+      BinOp *
+        Var x
+        Const 2
+      BinOp +
+        Var y
+        Const 5
+  Exit
+    Var e

@@ -1,0 +1,3 @@
+bool b{true}
+i64 x{b}
+exit x

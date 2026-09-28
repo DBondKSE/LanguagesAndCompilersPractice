@@ -1,7 +1,7 @@
 Program
-  Decl two const
+  Decl two i32 const
     Const 2
-  Decl y mut
+  Decl y i32 mut
     Const 1
   Assign y
     BinOp +

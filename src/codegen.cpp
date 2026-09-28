@@ -1,5 +1,4 @@
 #include "codegen.h"
-#include "error.h"
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
@@ -16,37 +15,48 @@
 
 using namespace llvm;
 
-typedef struct {
-  Value *slot;
-  bool mut;
-} variable;
+static std::string wider(const std::string &a, const std::string &b) {
+  return a == "i64" || b == "i64" ? "i64" : a;
+}
 
 class CodeGen : public Visitor {
   LLVMContext ctx;
   IRBuilder<> builder{ctx};
   std::unique_ptr<Module> module;
-  Type *i32;
+  Type *i1, *i32, *i64;
   Function *printfFn;
-  Value *fmt;
-  std::map<std::string, variable> vars;
+  std::map<const DeclNode *, Value *> slots;
   Value *result = nullptr;
 
-  Value *eval(const ExprNode &node) {
+  Type *llvm_type(const std::string &type) {
+    if (type == "i64")
+      return i64;
+    if (type == "bool")
+      return i1;
+    return i32;
+  }
+
+  Value *eval(ExprNode &node) {
     node.accept(*this);
     return result;
   }
 
-  const variable &lookup(const std::string &name, uint64_t line,
-                         uint64_t col) {
-    auto it = vars.find(name);
-    if (it == vars.end())
-      error(line, col, "variable '" + name + "' is used before its declaration");
-    return it->second;
+  Value *coerce(Value *value, const std::string &have,
+                const std::string &want) {
+    if (have == "i32" && want == "i64")
+      return builder.CreateSExt(value, i64, "wide");
+    return value;
+  }
+
+  Value *eval_as(ExprNode &node, const std::string &want) {
+    return coerce(eval(node), node.type, want);
   }
 
 public:
   CodeGen() {
+    i1 = Type::getInt1Ty(ctx);
     i32 = Type::getInt32Ty(ctx);
+    i64 = Type::getInt64Ty(ctx);
     module = std::make_unique<Module>("practice1", ctx);
 #if LLVM_VERSION_MAJOR >= 21
     module->setTargetTriple(Triple(sys::getDefaultTargetTriple()));
@@ -63,62 +73,79 @@ public:
     printfFn = Function::Create(FunctionType::get(i32, {i8ptr}, true),
                                 Function::ExternalLinkage, "printf",
                                 module.get());
-    fmt = builder.CreateGlobalStringPtr("Program exit with result %d\n");
   }
 
   const Module &getModule() const { return *module; }
 
-  void visit_program(const ProgramNode &node) override {
-    for (const std::unique_ptr<StmtNode> &stmt : node.statements)
+  void visit_program(ProgramNode &node) override {
+    for (std::unique_ptr<StmtNode> &stmt : node.statements)
       stmt->accept(*this);
     node.exit->accept(*this);
   }
 
-  void visit_decl(const DeclNode &node) override {
-    if (vars.count(node.name))
-      error(node.line, node.col,
-            "variable '" + node.name + "' is already declared");
-    Value *init = eval(*node.init);
-    Value *slot = builder.CreateAlloca(i32, nullptr, node.name);
+  void visit_decl(DeclNode &node) override {
+    Value *init = eval_as(*node.init, node.type_name);
+    Value *slot =
+        builder.CreateAlloca(llvm_type(node.type_name), nullptr, node.name);
     builder.CreateStore(init, slot);
-    vars[node.name] = {slot, node.mut};
+    slots[&node] = slot;
   }
 
-  void visit_assign(const AssignNode &node) override {
-    const variable &var = lookup(node.name, node.line, node.col);
-    if (!var.mut)
-      error(node.line, node.col,
-            "cannot assign to '" + node.name + "': it is not mut");
-    builder.CreateStore(eval(*node.value), var.slot);
+  void visit_assign(AssignNode &node) override {
+    builder.CreateStore(eval_as(*node.value, node.decl->type_name),
+                        slots.at(node.decl));
   }
 
-  void visit_exit(const ExitNode &node) override {
-    builder.CreateCall(printfFn, {fmt, eval(*node.value)});
+  void visit_exit(ExitNode &node) override {
+    Value *value = eval_as(*node.value, "i64");
+    if (node.value->type == "bool") {
+      Value *text = builder.CreateSelect(
+          value, builder.CreateGlobalStringPtr("true"),
+          builder.CreateGlobalStringPtr("false"), "text");
+      builder.CreateCall(
+          printfFn,
+          {builder.CreateGlobalStringPtr("Program exit with result %s\n"),
+           text});
+    } else {
+      builder.CreateCall(
+          printfFn,
+          {builder.CreateGlobalStringPtr("Program exit with result %lld\n"),
+           value});
+    }
     builder.CreateRet(ConstantInt::get(i32, 0));
   }
 
-  void visit_binop(const BinOpNode &node) override {
-    Value *l = eval(*node.left);
-    Value *r = eval(*node.right);
-    if (node.op == '+')
+  void visit_binop(BinOpNode &node) override {
+    std::string type = wider(node.left->type, node.right->type);
+    Value *l = eval_as(*node.left, type);
+    Value *r = eval_as(*node.right, type);
+    if (node.op == "+")
       result = builder.CreateAdd(l, r, "add");
-    else if (node.op == '-')
+    else if (node.op == "-")
       result = builder.CreateSub(l, r, "sub");
-    else
+    else if (node.op == "*")
       result = builder.CreateMul(l, r, "mul");
+    else if (node.op == "==")
+      result = builder.CreateICmpEQ(l, r, "eq");
+    else
+      result = builder.CreateICmpNE(l, r, "ne");
   }
 
-  void visit_var(const VarNode &node) override {
-    result = builder.CreateLoad(
-        i32, lookup(node.name, node.line, node.col).slot, node.name);
+  void visit_var(VarNode &node) override {
+    result = builder.CreateLoad(llvm_type(node.decl->type_name),
+                                slots.at(node.decl), node.name);
   }
 
-  void visit_const(const ConstNode &node) override {
-    result = ConstantInt::get(i32, node.value);
+  void visit_const(ConstNode &node) override {
+    result = ConstantInt::get(llvm_type(node.type), node.value, true);
+  }
+
+  void visit_bool(BoolNode &node) override {
+    result = ConstantInt::get(i1, node.value);
   }
 };
 
-int compile(const ProgramNode &program, const char *out_path) {
+int compile(ProgramNode &program, const char *out_path) {
   CodeGen codegen;
   program.accept(codegen);
 

@@ -39,14 +39,11 @@ std::unique_ptr<ExprNode> Parser::parse_factor() {
   const token *tok = peek();
   if (tok && tok->kind == TK_NUMBER) {
     eat();
-    uint64_t v = 0;
-    for (char c : tok->text) {
-      v = v * 10 + (c - '0');
-      if (v > INT32_MAX)
-        error(tok->line, tok->col,
-              "number '" + tok->text + "' does not fit in i32");
-    }
-    return std::make_unique<ConstNode>(tok->line, tok->col, (int32_t)v);
+    return std::make_unique<ConstNode>(tok->line, tok->col, tok->text);
+  }
+  if (tok && (is(*tok, TK_KEYWORD, "true") || is(*tok, TK_KEYWORD, "false"))) {
+    eat();
+    return std::make_unique<BoolNode>(tok->line, tok->col, tok->text == "true");
   }
   if (tok && tok->kind == TK_IDENT) {
     eat();
@@ -61,27 +58,53 @@ std::unique_ptr<ExprNode> Parser::parse_term() {
   while ((tok = peek()) && is(*tok, TK_OPERATOR, "*")) {
     eat();
     std::unique_ptr<ExprNode> right = parse_factor();
-    node = std::make_unique<BinOpNode>(tok->line, tok->col, '*',
+    node = std::make_unique<BinOpNode>(tok->line, tok->col, "*",
                                        std::move(node), std::move(right));
   }
   return node;
 }
 
-std::unique_ptr<ExprNode> Parser::parse_expr() {
+std::unique_ptr<ExprNode> Parser::parse_arith() {
   std::unique_ptr<ExprNode> node = parse_term();
   const token *tok;
   while ((tok = peek()) &&
          (is(*tok, TK_OPERATOR, "+") || is(*tok, TK_OPERATOR, "-"))) {
     eat();
     std::unique_ptr<ExprNode> right = parse_term();
-    node = std::make_unique<BinOpNode>(tok->line, tok->col, tok->text[0],
+    node = std::make_unique<BinOpNode>(tok->line, tok->col, tok->text,
                                        std::move(node), std::move(right));
   }
   return node;
 }
 
-std::unique_ptr<StmtNode> Parser::parse_decl() {
+static bool is_comparison(const token *tok) {
+  return tok && (is(*tok, TK_OPERATOR, "==") || is(*tok, TK_OPERATOR, "!="));
+}
+
+std::unique_ptr<ExprNode> Parser::parse_expr() {
+  std::unique_ptr<ExprNode> node = parse_arith();
+  const token *tok = peek();
+  if (!is_comparison(tok))
+    return node;
   eat();
+  std::unique_ptr<ExprNode> right = parse_arith();
+  node = std::make_unique<BinOpNode>(tok->line, tok->col, tok->text,
+                                     std::move(node), std::move(right));
+  tok = peek();
+  if (is_comparison(tok))
+    error(tok->line, tok->col,
+          "only one comparison is allowed in an expression, got " +
+              describe(*tok));
+  return node;
+}
+
+static bool is_type(const token &tok) {
+  return is(tok, TK_KEYWORD, "i32") || is(tok, TK_KEYWORD, "i64") ||
+         is(tok, TK_KEYWORD, "bool");
+}
+
+std::unique_ptr<StmtNode> Parser::parse_decl() {
+  const token &type = eat();
   const token *tok = peek();
   bool mut = tok && is(*tok, TK_KEYWORD, "mut");
   if (mut)
@@ -97,8 +120,8 @@ std::unique_ptr<StmtNode> Parser::parse_decl() {
     error(name.line, name.col, needs_init);
   std::unique_ptr<ExprNode> init = parse_expr();
   expect(TK_BLOCK, "}", "'}'");
-  return std::make_unique<DeclNode>(name.line, name.col, name.text, mut,
-                                    std::move(init));
+  return std::make_unique<DeclNode>(name.line, name.col, type.text, name.text,
+                                    mut, std::move(init));
 }
 
 std::unique_ptr<StmtNode> Parser::parse_assign() {
@@ -110,7 +133,7 @@ std::unique_ptr<StmtNode> Parser::parse_assign() {
 
 std::unique_ptr<StmtNode> Parser::parse_statement() {
   const token &tok = *peek();
-  if (is(tok, TK_KEYWORD, "i32"))
+  if (is_type(tok))
     return parse_decl();
   if (tok.kind == TK_IDENT)
     return parse_assign();

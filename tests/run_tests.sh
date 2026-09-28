@@ -6,7 +6,7 @@ clang++ $(llvm-config --cxxflags) src/*.cpp $(llvm-config --ldflags --libs core)
 pass=0
 fail=0
 
-for src in tests/ok*.txt; do
+for src in tests/ok/*.txt; do
   name=${src%.txt}
   rm -f "$name.ll"
 
@@ -34,7 +34,7 @@ for src in tests/ok*.txt; do
   fi
 done
 
-for src in tests/bad*.txt; do
+for src in tests/err/*.txt; do
   name=${src%.txt}
   rm -f "$name.ll"
 
