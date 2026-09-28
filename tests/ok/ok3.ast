@@ -1,5 +1,5 @@
 Program
-  Decl total_2 mut
+  Decl total_2 i32 mut
     Const 1
   Assign total_2
     BinOp +

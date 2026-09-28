@@ -1,0 +1,10 @@
+bool b{true}
+i32 x{1 + 1}
+bool c{b == false}
+bool d{x != 1}
+i64 big{3000000000}
+i64 max{9223372036854775807}
+i64 mut y{0}
+y := x
+bool e{x * 2 != y + 5}
+exit e

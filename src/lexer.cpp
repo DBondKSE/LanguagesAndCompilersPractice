@@ -9,10 +9,13 @@ enum tok_state {
   START,
   IDENT,
   NUMBER,
-  COLON
+  COLON,
+  EQUAL,
+  BANG
 };
 
-static const std::set<std::string> keywords = {"i32", "mut", "exit"};
+static const std::set<std::string> keywords = {
+    "i32", "i64", "bool", "mut", "exit", "true", "false"};
 
 static const char *kind_name(tok_kind k) {
   switch (k) {
@@ -76,6 +79,10 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         state = NUMBER, start = i, start_col = col;
       } else if (b == ':') {
         state = COLON, start_col = col;
+      } else if (b == '=') {
+        state = EQUAL, start_col = col;
+      } else if (b == '!') {
+        state = BANG, start_col = col;
       } else if (b == '{') {
         if (!brace_col)
           brace_col = col;
@@ -114,6 +121,16 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         state = START;
       } else {
         error(line, start_col, "':' is not followed by '='");
+      }
+    } else if (state == EQUAL || state == BANG) {
+      std::string op = state == EQUAL ? "==" : "!=";
+      if (!eof && b == '=') {
+        t.push_back({TK_OPERATOR, op, line, start_col});
+        state = START;
+      } else {
+        error(line, start_col,
+              "expected '" + op + "' (a single '" + op[0] +
+                  "' is not an operator)");
       }
     }
     i++;

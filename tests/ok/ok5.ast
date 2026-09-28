@@ -1,9 +1,9 @@
 Program
-  Decl f const
+  Decl f i32 const
     Const 67
-  Decl a const
+  Decl a i32 const
     Const 6
-  Decl b mut
+  Decl b i32 mut
     Const 7
   Assign b
     BinOp *

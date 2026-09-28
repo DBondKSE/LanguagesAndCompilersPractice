@@ -21,6 +21,7 @@ class Parser {
 
   std::unique_ptr<ExprNode> parse_factor();
   std::unique_ptr<ExprNode> parse_term();
+  std::unique_ptr<ExprNode> parse_arith();
   std::unique_ptr<ExprNode> parse_expr();
   std::unique_ptr<StmtNode> parse_decl();
   std::unique_ptr<StmtNode> parse_assign();

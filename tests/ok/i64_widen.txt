@@ -1,0 +1,8 @@
+i32 a{10}
+i64 b{20}
+i64 c{a + b}
+i64 d{a + b}
+i32 e{a * 5}
+i64 f{a}
+i64 g{b}
+exit c

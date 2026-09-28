@@ -1,0 +1,5 @@
+i32 a{2000000000}
+i64 b{a}
+i64 mut s{b + a}
+s := s + a
+exit s

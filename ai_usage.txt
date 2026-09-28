@@ -1,7 +1,7 @@
-Claude Code / Opus 5 used. Prompts:
-1. Should ident and number have definitions in EBNF?
-2. Check if task 1 is implemented correctly and according to the file [w03-practice.pdf attached]
-3. Can you move the cpp files to src/ and separate functionality into multiple files? Lexer, Parser etc get their own files, and compiler.cpp only has main
-4. Clear git from .o, .ll, .bin files
-5. Check the task 2, is it completed according to the EBNF from task 1?
-6. Write test cases according to task 4 requirements
+Claude Code / Opus 5.5 used; Chat link unavailable, prompts used:
+1. Explain task 1 to me as if I were a 5 year old [w04-practice.pdf attached]
+2. Did I update EBNF correctly?
+3. Write and run all needed test cases in Docker llvm-practice container
+4. Split the test cases into ok/ and err/ folders, make sure they are correct in git
+5. Check the staged files according to w04-practice.pdf requirements and fix all the errors
+6. Write a short README.md for this project
