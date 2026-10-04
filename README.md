@@ -1,4 +1,4 @@
-# w01-practice
+# Languages and Compilers Practice
 
 A small compiler for a toy language, written in C++ on top of LLVM. It tokenizes the source, parses it into an AST, type-checks it, and emits LLVM IR.
 

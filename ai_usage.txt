@@ -5,3 +5,10 @@ Claude Code / Opus 5.5 used; Chat link unavailable, prompts used:
 4. Based on the implemented if/else, add while 
 5. Check the staged files according to w05-practice.pdf requirements and fix all the errors
 6. Update README.md for this project with this task's changes
+7. Fix the issues from the comment on my PR:
+    What to fix:
+
+    Still open from the Practice 3 review: i32 x{} reports line 1:5: variable 'x' needs an initialiser in {}. The braces are there, the problem is the empty expression at } (1:7).
+    Small things:
+    2. input.txt is still in the root, and README starts with # w01-practice.
+    ignore the input.txt comment - I want it to remain in git

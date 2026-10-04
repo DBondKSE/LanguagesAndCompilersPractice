@@ -131,14 +131,10 @@ std::unique_ptr<StmtNode> Parser::parse_decl() {
   if (mut)
     eat();
   const token &name = expect(TK_IDENT, "", "a variable name");
-  std::string needs_init =
-      "variable '" + name.text + "' needs an initialiser in {}";
   if (!peek())
-    error(name.line, name.col, needs_init);
+    error(name.line, name.col,
+          "variable '" + name.text + "' needs an initialiser in {}");
   expect(TK_BLOCK, "{", "'{' after '" + name.text + "'");
-  tok = peek();
-  if (tok && is(*tok, TK_BLOCK, "}"))
-    error(name.line, name.col, needs_init);
   std::unique_ptr<ExprNode> init = parse_expr();
   expect(TK_BLOCK, "}", "'}'");
   return std::make_unique<DeclNode>(name.line, name.col, type.text, name.text,
