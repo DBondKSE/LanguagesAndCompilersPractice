@@ -1,0 +1,19 @@
+Program
+  Decl done bool mut
+    Bool false
+  Decl steps i32 mut
+    Const 0
+  While
+    Not
+      Var done
+    Block
+      Assign steps
+        BinOp +
+          Var steps
+          Const 1
+      Assign done
+        BinOp ==
+          Var steps
+          Const 7
+  Exit
+    Var steps

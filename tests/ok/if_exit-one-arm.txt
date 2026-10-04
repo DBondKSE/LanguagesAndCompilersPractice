@@ -1,0 +1,7 @@
+i32 mut a{3}
+if a != 3
+{
+    exit 0
+}
+a := a * 2
+exit a

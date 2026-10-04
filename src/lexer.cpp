@@ -15,7 +15,7 @@ enum tok_state {
 };
 
 static const std::set<std::string> keywords = {
-    "i32", "i64", "bool", "mut", "exit", "true", "false"};
+    "i32", "i64", "bool", "mut", "exit", "true", "false", "if", "else", "while"};
 
 static const char *kind_name(tok_kind k) {
   switch (k) {
@@ -55,7 +55,6 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
   tok_state state = START;
   size_t i = 0, start = 0;
   uint64_t line = 1, col = 1, start_col = 0;
-  uint64_t brace_col = 0;
 
   while (i <= s.size()) {
     bool eof = i == s.size();
@@ -63,8 +62,6 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
 
     if (state == START) {
       if (eof || b == '\n') {
-        if (brace_col)
-          error(line, brace_col, "'{' is not closed before the end of the line");
         if (eof)
           break;
         t.push_back({TK_ENDLINE, "\n", line, col});
@@ -83,13 +80,8 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         state = EQUAL, start_col = col;
       } else if (b == '!') {
         state = BANG, start_col = col;
-      } else if (b == '{') {
-        if (!brace_col)
-          brace_col = col;
-        t.push_back({TK_BLOCK, "{", line, col});
-      } else if (b == '}') {
-        brace_col = 0;
-        t.push_back({TK_BLOCK, "}", line, col});
+      } else if (b == '{' || b == '}') {
+        t.push_back({TK_BLOCK, std::string(1, (char)b), line, col});
       } else if (b == '+' || b == '-' || b == '*') {
         t.push_back({TK_OPERATOR, std::string(1, (char)b), line, col});
       } else {
@@ -122,15 +114,22 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
       } else {
         error(line, start_col, "':' is not followed by '='");
       }
-    } else if (state == EQUAL || state == BANG) {
-      std::string op = state == EQUAL ? "==" : "!=";
+    } else if (state == EQUAL) {
       if (!eof && b == '=') {
-        t.push_back({TK_OPERATOR, op, line, start_col});
+        t.push_back({TK_OPERATOR, "==", line, start_col});
         state = START;
       } else {
         error(line, start_col,
-              "expected '" + op + "' (a single '" + op[0] +
-                  "' is not an operator)");
+              "expected '==' (a single '=' is not an operator)");
+      }
+    } else if (state == BANG) {
+      if (!eof && b == '=') {
+        t.push_back({TK_OPERATOR, "!=", line, start_col});
+        state = START;
+      } else {
+        t.push_back({TK_OPERATOR, "!", line, start_col});
+        state = START;
+        continue;
       }
     }
     i++;

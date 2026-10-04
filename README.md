@@ -4,21 +4,34 @@ A small compiler for a toy language, written in C++ on top of LLVM. It tokenizes
 
 ## The language
 
-A program is a list of declarations and assignments, ending with `exit`:
+A program is a list of declarations, assignments, `if` and `while` statements, ending with `exit`:
 
 ```
 i32 x{15}
 i64 mut y{x}
 bool big{y != 0}
-y := y * x + 1
+if !big
+{
+    exit 0
+}
+else
+{
+    y := y * x + 1
+}
 exit y
 ```
 
 - Types: `i32`, `i64`, `bool`
 - Variables are immutable unless declared `mut`
-- Operators: `+`, `-`, `*`, `==`, `!=`
+- Operators: `+`, `-`, `*`, `==`, `!=`, and `!` on a `bool`
 - `i32` values widen to `i64` automatically; nothing narrows
+- `if cond` takes a `bool`; `{`, `}` and `else` stand alone on their lines; `else` is optional
+- `while cond` repeats its block while `cond` (a `bool`) holds
+- A block opens its own scope: an inner declaration may shadow an outer name with any type, and a block's names are gone after its `}`
+- A block may end with `exit`; nothing follows an `exit` in the same block
 - `exit` prints `Program exit with result <value>`
+
+`opt -passes=mem2reg -S output.ll` promotes the variable slots to registers and shows the `phi` nodes at merge points.
 
 The full grammar is in [grammar.ebnf](grammar.ebnf).
 
