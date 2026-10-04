@@ -1,9 +1,9 @@
 Program
-  Decl i32x const
+  Decl i32x i32 const
     Const 1
-  Decl mutable const
+  Decl mutable i32 const
     Const 2
-  Decl exit_code const
+  Decl exit_code i32 const
     BinOp +
       Var i32x
       Var mutable

@@ -1,3 +1,4 @@
+.DS_Store
 tests/*.o
 tests/*.bin
 tests/*.ll
