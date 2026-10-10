@@ -1,0 +1,6 @@
+fn half := (i32 a) -> i32
+{
+    exit a
+}
+i64 big{1}
+exit half(big)

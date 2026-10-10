@@ -1,0 +1,8 @@
+fn f := (i32 x) -> i32
+{
+    if true
+    {
+        exit x
+    }
+}
+exit f(1)

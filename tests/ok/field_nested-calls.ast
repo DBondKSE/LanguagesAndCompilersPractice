@@ -1,0 +1,54 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Circle
+    Field center Point const
+    Field radius i32 mut
+  Fn add i32
+    Param a i32
+    Param b i32
+    Block
+      Decl sum i32 const
+        BinOp +
+          Var a
+          Var b
+      Exit
+        Var sum
+  Fn grow Circle
+    Param c Circle
+    Param by i32
+    Block
+      Decl bigger Circle const
+        Var c.center
+        Call add
+          Var c.radius
+          Var by
+      Exit
+        Var bigger
+  Decl p Point const
+    Const 1
+    Const 2
+  Decl c Circle const
+    Var p
+    Const 5
+  Decl d Circle const
+    Call grow
+      Call grow
+        Var c
+        Const 1
+      Call add
+        Const 2
+        Const 3
+  Decl result i32 const
+    Call add
+      Call add
+        Var d.radius
+        Var d.center.x
+      Call add
+        Var d.center.y
+        Call add
+          Var c.radius
+          Var c.radius
+  Exit
+    Var result

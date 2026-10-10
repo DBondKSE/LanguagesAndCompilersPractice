@@ -1,0 +1,14 @@
+struct Pair
+{
+    i32 mut first
+    i32 second
+}
+struct Outer
+{
+    Pair mut pair
+}
+Pair p{1, 2}
+Outer mut a{p}
+Outer b{p}
+a := b
+exit 0

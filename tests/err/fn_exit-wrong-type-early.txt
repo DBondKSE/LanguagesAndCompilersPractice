@@ -1,0 +1,9 @@
+fn check := (i32 x) -> i32
+{
+    if x == 0
+    {
+        exit true
+    }
+    exit x
+}
+exit check(1)

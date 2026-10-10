@@ -1,0 +1,9 @@
+struct Pair
+{
+    i32 mut first
+    i32 second
+}
+Pair mut p{1, 2}
+p.first := 3
+p.second := 4
+exit p.first

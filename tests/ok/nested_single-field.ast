@@ -1,0 +1,24 @@
+Program
+  Struct Box
+    Field value i64 mut
+  Struct Crate
+    Field box Box mut
+  Struct Pallet
+    Field crate Crate mut
+  Decl p Pallet mut
+    Init
+      Init
+        Const 3
+  Decl c Crate const
+    Init
+      Const 4
+  Decl before i64 const
+    Var p.crate.box.value
+  Assign p.crate
+    Var c
+  Decl sum i64 const
+    BinOp +
+      Var before
+      Var p.crate.box.value
+  Exit
+    Var sum

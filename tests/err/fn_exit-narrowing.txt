@@ -1,0 +1,5 @@
+fn narrow := (i64 x) -> i32
+{
+    exit x
+}
+exit narrow(1)

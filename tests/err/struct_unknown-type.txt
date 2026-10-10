@@ -1,0 +1,2 @@
+Point p{10, 20}
+exit 0

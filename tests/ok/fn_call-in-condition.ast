@@ -1,0 +1,33 @@
+Program
+  Fn below bool
+    Param n i32
+    Param limit i32
+    Block
+      Decl reached bool const
+        BinOp ==
+          Var n
+          Var limit
+      Exit
+        Not
+          Var reached
+  Decl i i32 mut
+    Const 0
+  While
+    Call below
+      Var i
+      Const 3
+    Block
+      Assign i
+        BinOp +
+          Var i
+          Const 1
+  If
+    Not
+      Call below
+        Var i
+        Const 3
+    Block
+      Exit
+        Var i
+  Exit
+    Const 0

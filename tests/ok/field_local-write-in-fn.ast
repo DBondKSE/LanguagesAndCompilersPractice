@@ -1,0 +1,27 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Fn swapped Point
+    Param p Point
+    Block
+      Decl q Point mut
+        Var p
+      Assign q.x
+        Var p.y
+      Assign q.y
+        Var p.x
+      Exit
+        Var q
+  Fn first i32
+    Param p Point
+    Block
+      Exit
+        Var p.x
+  Decl p Point const
+    Const 10
+    Const 30
+  Exit
+    Call first
+      Call swapped
+        Var p

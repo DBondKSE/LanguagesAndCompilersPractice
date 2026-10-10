@@ -1,0 +1,26 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Decl total i32 mut
+    Const 0
+  While
+    BinOp !=
+      Var total
+      Const 3
+    Block
+      Decl p Point const
+        Var total
+        BinOp +
+          Var total
+          Const 1
+      Decl q Point mut
+        Var p
+      Assign q
+        Var p
+      Assign total
+        BinOp +
+          Var total
+          Const 1
+  Exit
+    Var total

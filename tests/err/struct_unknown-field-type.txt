@@ -1,0 +1,11 @@
+struct Circle
+{
+    Point center
+    i32 radius
+}
+struct Point
+{
+    i32 x
+    i32 y
+}
+exit 0

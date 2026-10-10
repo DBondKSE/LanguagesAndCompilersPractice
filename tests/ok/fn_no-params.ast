@@ -1,0 +1,7 @@
+Program
+  Fn answer i32
+    Block
+      Exit
+        Const 42
+  Exit
+    Call answer

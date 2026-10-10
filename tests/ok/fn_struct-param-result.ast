@@ -1,0 +1,53 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Circle
+    Field center Point const
+    Field radius i32 mut
+  Fn same Point
+    Param p Point
+    Block
+      Exit
+        Var p
+  Fn origin Point
+    Block
+      Decl o Point const
+        Const 0
+        Const 0
+      Exit
+        Var o
+  Fn pick Point
+    Param a Point
+    Param b Point
+    Param first bool
+    Block
+      If
+        Var first
+        Block
+          Exit
+            Var a
+      Exit
+        Call same
+          Var b
+  Decl p Point const
+    Const 10
+    Const 20
+  Decl q Point const
+    Call same
+      Var p
+  Decl r Point mut
+    Call pick
+      Var p
+      Call origin
+      Bool false
+  Assign r
+    Call pick
+      Var q
+      Var r
+      Bool true
+  Decl c Circle const
+    Call origin
+    Const 5
+  Exit
+    Const 1

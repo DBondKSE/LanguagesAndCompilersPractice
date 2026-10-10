@@ -1,0 +1,17 @@
+Program
+  Struct Wide
+    Field big i64 const
+    Field flag bool mut
+    Field small i32 const
+  Decl n i32 const
+    Const 7
+  Decl w Wide const
+    BinOp *
+      Var n
+      Const 2
+    BinOp ==
+      Var n
+      Const 7
+    Var n
+  Exit
+    Var n

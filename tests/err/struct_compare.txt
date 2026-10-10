@@ -1,0 +1,9 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+Point p{1, 2}
+Point q{p}
+bool same{p == q}
+exit same

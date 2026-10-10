@@ -7,15 +7,29 @@
 #include <vector>
 
 class SemanticChecker : public Visitor {
+  std::map<std::string, const StructNode *> structs;
+  std::map<std::string, const FnNode *> functions;
+  const FnNode *current_fn = nullptr;
   std::vector<std::map<std::string, const DeclNode *>> scopes;
 
   const std::string &check(ExprNode &node);
   const DeclNode &lookup(const std::string &name, const Node &at) const;
+  const StructNode *resolve_type(const std::string &type, uint64_t line,
+                                 uint64_t col) const;
+  const FieldNode *resolve_links(const DeclNode &decl,
+                                 std::vector<Link> &links, uint64_t line,
+                                 bool write) const;
+  void check_value(ExprNode &value, const std::string &type,
+                   const StructNode *struct_type, const Node &at,
+                   const std::string &target);
+  void declare_fn(FnNode &node);
   void check_assignable(const ExprNode &expr, const std::string &want,
                         const Node &at, const std::string &what) const;
 
 public:
   void visit_program(ProgramNode &node) override;
+  void visit_struct(StructNode &node) override;
+  void visit_fn(FnNode &node) override;
   void visit_decl(DeclNode &node) override;
   void visit_assign(AssignNode &node) override;
   void visit_exit(ExitNode &node) override;
@@ -25,6 +39,8 @@ public:
   void visit_binop(BinOpNode &node) override;
   void visit_not(NotNode &node) override;
   void visit_var(VarNode &node) override;
+  void visit_call(CallNode &node) override;
+  void visit_init(InitNode &node) override;
   void visit_const(ConstNode &node) override;
   void visit_bool(BoolNode &node) override;
 };

@@ -1,0 +1,1 @@
+compilation error: line 7:1: cannot assign to 'p' of type Point with a value of type i32

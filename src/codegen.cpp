@@ -27,6 +27,9 @@ class CodeGen : public Visitor {
   Type *i1, *i32, *i64;
   Function *printfFn;
   Function *function;
+  const FnNode *current_fn = nullptr;
+  std::map<std::string, StructType *> struct_types;
+  std::map<const FnNode *, Function *> functions;
   std::map<const DeclNode *, Value *> slots;
   Value *result = nullptr;
 
@@ -35,7 +38,9 @@ class CodeGen : public Visitor {
       return i64;
     if (type == "bool")
       return i1;
-    return i32;
+    if (type == "i32")
+      return i32;
+    return struct_types.at(type);
   }
 
   Value *eval(ExprNode &node) {
@@ -59,6 +64,17 @@ class CodeGen : public Visitor {
     BasicBlock &entry = function->getEntryBlock();
     builder.SetInsertPoint(&entry, entry.getFirstNonPHIOrDbgOrAlloca());
     return builder.CreateAlloca(type, nullptr, name);
+  }
+
+  Value *address(const DeclNode *decl, const std::vector<Link> &links) {
+    Value *slot = slots.at(decl);
+    if (links.empty())
+      return slot;
+    std::vector<Value *> indices = {ConstantInt::get(i32, 0)};
+    for (const Link &link : links)
+      indices.push_back(ConstantInt::get(i32, link.index));
+    return builder.CreateInBoundsGEP(llvm_type(decl->type_name), slot, indices,
+                                     chain(decl->name, links));
   }
 
   void emit_block(BlockNode &block, BasicBlock *bb, BasicBlock *next_bb) {
@@ -94,24 +110,77 @@ public:
   Module &getModule() { return *module; }
 
   void visit_program(ProgramNode &node) override {
+    for (std::unique_ptr<StructNode> &s : node.structs)
+      s->accept(*this);
+    for (std::unique_ptr<FnNode> &fn : node.functions) {
+      std::vector<Type *> params;
+      for (std::unique_ptr<ParamNode> &param : fn->params)
+        params.push_back(llvm_type(param->type_name));
+      functions[fn.get()] = Function::Create(
+          FunctionType::get(llvm_type(fn->result_type), params, false),
+          Function::ExternalLinkage, "fn_" + fn->name, module.get());
+    }
+    for (std::unique_ptr<FnNode> &fn : node.functions)
+      fn->accept(*this);
     for (std::unique_ptr<StmtNode> &stmt : node.statements)
       stmt->accept(*this);
     node.exit->accept(*this);
   }
 
+  void visit_struct(StructNode &node) override {
+    std::vector<Type *> fields;
+    for (std::unique_ptr<FieldNode> &field : node.fields)
+      fields.push_back(llvm_type(field->type_name));
+    struct_types[node.name] = StructType::create(ctx, fields, node.name);
+  }
+
+  void visit_fn(FnNode &node) override {
+    IRBuilderBase::InsertPointGuard guard(builder);
+    Function *outer = function;
+    function = functions.at(&node);
+    current_fn = &node;
+    builder.SetInsertPoint(BasicBlock::Create(ctx, "entry", function));
+    for (unsigned i = 0; i < node.params.size(); i++) {
+      const ParamNode &param = *node.params[i];
+      Argument *arg = function->getArg(i);
+      arg->setName(param.name);
+      Value *slot = entry_alloca(arg->getType(), param.name + ".addr");
+      builder.CreateStore(arg, slot);
+      slots[&param] = slot;
+    }
+    node.body->accept(*this);
+    current_fn = nullptr;
+    function = outer;
+  }
+
   void visit_decl(DeclNode &node) override {
-    Value *init = eval_as(*node.init, node.type_name);
-    Value *slot = entry_alloca(llvm_type(node.type_name), node.name);
-    builder.CreateStore(init, slot);
+    Type *type = llvm_type(node.type_name);
+    Value *slot = entry_alloca(type, node.name);
+    std::vector<std::unique_ptr<ExprNode>> &values = node.init->values;
+    if (!node.struct_type || node.init->copy) {
+      builder.CreateStore(eval_as(*values[0], node.type_name), slot);
+    } else {
+      for (unsigned i = 0; i < values.size(); i++) {
+        const FieldNode &field = *node.struct_type->fields[i];
+        Value *value = eval_as(*values[i], field.type_name);
+        builder.CreateStore(
+            value, builder.CreateStructGEP(type, slot, i,
+                                           node.name + "." + field.name));
+      }
+    }
     slots[&node] = slot;
   }
 
   void visit_assign(AssignNode &node) override {
-    builder.CreateStore(eval_as(*node.value, node.decl->type_name),
-                        slots.at(node.decl));
+    builder.CreateStore(eval_as(*node.value, node.type),
+                        address(node.decl, node.links));
   }
 
   void visit_exit(ExitNode &node) override {
+    if (current_fn) {
+      builder.CreateRet(eval_as(*node.value, current_fn->result_type));
+      return;
+    }
     Value *value = eval_as(*node.value, "i64");
     if (node.value->type == "bool") {
       Value *text = builder.CreateSelect(
@@ -185,8 +254,32 @@ public:
   }
 
   void visit_var(VarNode &node) override {
-    result = builder.CreateLoad(llvm_type(node.decl->type_name),
-                                slots.at(node.decl), node.name);
+    result = builder.CreateLoad(
+        llvm_type(node.type), address(node.decl, node.links),
+        node.links.empty() ? node.name : node.links.back().name);
+  }
+
+  void visit_call(CallNode &node) override {
+    std::vector<Value *> args;
+    for (size_t i = 0; i < node.args.size(); i++)
+      args.push_back(
+          eval_as(*node.args[i], node.fn->params[i]->type_name));
+    result = builder.CreateCall(functions.at(node.fn), args, node.name);
+  }
+
+  void visit_init(InitNode &node) override {
+    if (node.copy) {
+      result = eval(*node.values[0]);
+      return;
+    }
+    Value *object = PoisonValue::get(llvm_type(node.type));
+    for (unsigned i = 0; i < node.values.size(); i++) {
+      const FieldNode &field = *node.struct_type->fields[i];
+      Value *value = eval_as(*node.values[i], field.type_name);
+      object = builder.Insert(InsertValueInst::Create(object, value, {i}),
+                              node.type + "." + field.name);
+    }
+    result = object;
   }
 
   void visit_const(ConstNode &node) override {

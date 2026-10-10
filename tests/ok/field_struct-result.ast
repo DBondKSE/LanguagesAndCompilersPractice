@@ -1,0 +1,28 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Fn moved Point
+    Param p Point
+    Param dx i32
+    Block
+      Decl q Point const
+        BinOp +
+          Var p.x
+          Var dx
+        Var p.y
+      Exit
+        Var q
+  Decl p Point const
+    Const 10
+    Const 20
+  Decl r Point mut
+    Call moved
+      Var p
+      Const 1
+  Assign r
+    Call moved
+      Var r
+      Const 2
+  Exit
+    Var r.x
