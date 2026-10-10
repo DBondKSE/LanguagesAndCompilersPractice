@@ -1,0 +1,24 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Disc
+{
+    Point mut center
+    i64 mut radius
+    bool filled
+}
+Point p{1, 2}
+Disc mut d{p, 3, true}
+i32 mut steps{0}
+while d.radius != 5
+{
+    d.radius := d.radius + 1
+    steps := steps + 1
+}
+if !d.filled
+{
+    exit 0
+}
+exit steps

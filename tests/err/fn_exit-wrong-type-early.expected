@@ -1,0 +1,1 @@
+compilation error: line 5:14: cannot exit function 'check' of type i32 with a value of type bool

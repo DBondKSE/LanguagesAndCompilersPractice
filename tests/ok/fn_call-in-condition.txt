@@ -1,0 +1,15 @@
+fn below := (i32 n, i32 limit) -> bool
+{
+    bool reached{n == limit}
+    exit !reached
+}
+i32 mut i{0}
+while below(i, 3)
+{
+    i := i + 1
+}
+if !below(i, 3)
+{
+    exit i
+}
+exit 0

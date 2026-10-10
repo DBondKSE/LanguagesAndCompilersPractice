@@ -1,0 +1,22 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Circle
+{
+    Point center
+    i64 mut radius
+}
+fn around := (Point p, i32 r) -> Circle
+{
+    Circle c{{p.x + 1, p.y + 1}, r * 2}
+    exit c
+}
+fn total := (Circle c) -> i64
+{
+    i64 sum{c.center.x + c.center.y + c.radius}
+    exit sum
+}
+Point p{3, 5}
+exit total(around(p, 10))

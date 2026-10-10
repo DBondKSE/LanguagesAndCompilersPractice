@@ -1,0 +1,6 @@
+fn f := (i32 x) -> i32
+{
+    x := x + 1
+    exit x
+}
+exit f(1)

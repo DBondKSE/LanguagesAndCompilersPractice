@@ -1,0 +1,17 @@
+Program
+  Fn main i32
+    Block
+      Exit
+        Const 1
+  Fn printf i32
+    Param n i32
+    Block
+      Decl sum i32 const
+        BinOp +
+          Var n
+          Call main
+      Exit
+        Var sum
+  Exit
+    Call printf
+      Const 2

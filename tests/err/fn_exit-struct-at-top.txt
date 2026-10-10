@@ -1,0 +1,11 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+fn origin := () -> Point
+{
+    Point o{0, 0}
+    exit o
+}
+exit origin()

@@ -1,0 +1,25 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Circle
+{
+    Point center
+    i32 mut radius
+}
+fn add := (i32 a, i32 b) -> i32
+{
+    i32 sum{a + b}
+    exit sum
+}
+fn grow := (Circle c, i32 by) -> Circle
+{
+    Circle bigger{c.center, add(c.radius, by)}
+    exit bigger
+}
+Point p{1, 2}
+Circle c{p, 5}
+Circle d{grow(grow(c, 1), add(2, 3))}
+i32 result{add(add(d.radius, d.center.x), add(d.center.y, add(c.radius, c.radius)))}
+exit result

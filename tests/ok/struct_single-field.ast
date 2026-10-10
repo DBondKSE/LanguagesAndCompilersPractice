@@ -1,0 +1,13 @@
+Program
+  Struct Box
+    Field value i64 const
+  Struct Crate
+    Field box Box const
+  Decl b Box const
+    Const 9000000000
+  Decl c Crate const
+    Var b
+  Decl d Crate const
+    Var c
+  Exit
+    Const 2

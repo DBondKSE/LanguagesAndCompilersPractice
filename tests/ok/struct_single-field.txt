@@ -1,0 +1,12 @@
+struct Box
+{
+    i64 value
+}
+struct Crate
+{
+    Box box
+}
+Box b{9000000000}
+Crate c{b}
+Crate d{c}
+exit 2

@@ -1,0 +1,14 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+fn scale := (i64 value, i64 by) -> i64
+{
+    i64 product{value * by}
+    exit product
+}
+Point p{10, 20}
+i32 three{3}
+i64 result{scale(9000000000, 1) + scale(p.x, three)}
+exit result

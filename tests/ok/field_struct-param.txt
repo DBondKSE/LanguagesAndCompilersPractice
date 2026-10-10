@@ -1,0 +1,16 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+fn isXZero := (Point p) -> bool
+{
+    bool zero{p.x == 0}
+    exit zero
+}
+fn sum := (Point p) -> i32
+{
+    exit p.x
+}
+Point o{0, 5}
+exit isXZero(o)

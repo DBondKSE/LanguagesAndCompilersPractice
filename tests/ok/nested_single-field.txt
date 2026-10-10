@@ -1,0 +1,18 @@
+struct Box
+{
+    i64 mut value
+}
+struct Crate
+{
+    Box mut box
+}
+struct Pallet
+{
+    Crate mut crate
+}
+Pallet mut p{{{3}}}
+Crate c{{4}}
+i64 before{p.crate.box.value}
+p.crate := c
+i64 sum{before + p.crate.box.value}
+exit sum

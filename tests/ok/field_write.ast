@@ -1,0 +1,31 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Disc
+    Field center Point mut
+    Field radius i64 mut
+    Field filled bool const
+  Decl p Point const
+    Const 1
+    Const 2
+  Decl d Disc mut
+    Var p
+    Const 3
+    Bool true
+  Assign d.radius
+    Const 40
+  Assign d.center.x
+    BinOp +
+      Var d.center.x
+      Const 4
+  Assign d.center.y
+    Const 1
+  Decl sum i64 const
+    BinOp +
+      BinOp +
+        Var d.radius
+        Var d.center.x
+      Var d.center.y
+  Exit
+    Var sum

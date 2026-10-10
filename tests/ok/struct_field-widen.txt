@@ -1,0 +1,9 @@
+struct Wide
+{
+    i64 big
+    bool mut flag
+    i32 small
+}
+i32 n{7}
+Wide w{n * 2, n == 7, n}
+exit n

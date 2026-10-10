@@ -1,0 +1,14 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+i32 mut total{0}
+while total != 3
+{
+    Point p{total, total + 1}
+    Point mut q{p}
+    q := p
+    total := total + 1
+}
+exit total

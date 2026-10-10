@@ -1,0 +1,5 @@
+fn zero := () -> i32
+{
+    exit 0
+}
+exit zero(1)
