@@ -1,0 +1,8 @@
+bool mut done{false}
+i32 mut steps{0}
+while !done
+{
+    steps := steps + 1
+    done := steps == 7
+}
+exit steps

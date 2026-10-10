@@ -1,0 +1,13 @@
+i32 x{5}
+i64 mut total{0}
+if true
+{
+    bool x{x == 5}
+    if x
+    {
+        i64 x{9000000000}
+        total := x
+    }
+}
+total := total + x
+exit total

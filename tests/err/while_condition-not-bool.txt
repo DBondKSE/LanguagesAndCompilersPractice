@@ -1,0 +1,6 @@
+i32 mut i{1}
+while i
+{
+    i := 0
+}
+exit i

@@ -1,0 +1,19 @@
+Program
+  Decl n i64 mut
+    Const 1
+  While
+    Bool true
+    Block
+      Assign n
+        BinOp *
+          Var n
+          Const 3
+      If
+        BinOp ==
+          Var n
+          Const 243
+        Block
+          Exit
+            Var n
+  Exit
+    Const 0

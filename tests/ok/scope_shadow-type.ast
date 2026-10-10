@@ -1,0 +1,25 @@
+Program
+  Decl x i32 const
+    Const 5
+  Decl total i64 mut
+    Const 0
+  If
+    Bool true
+    Block
+      Decl x bool const
+        BinOp ==
+          Var x
+          Const 5
+      If
+        Var x
+        Block
+          Decl x i64 const
+            Const 9000000000
+          Assign total
+            Var x
+  Assign total
+    BinOp +
+      Var total
+      Var x
+  Exit
+    Var total

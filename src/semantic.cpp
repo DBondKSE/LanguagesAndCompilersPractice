@@ -12,11 +12,13 @@ const std::string &SemanticChecker::check(ExprNode &node) {
 
 const DeclNode &SemanticChecker::lookup(const std::string &name,
                                         const Node &at) const {
-  auto it = symbols.find(name);
-  if (it == symbols.end())
-    error(at.line, at.col,
-          "variable '" + name + "' is used before its declaration");
-  return *it->second;
+  for (auto frame = scopes.rbegin(); frame != scopes.rend(); ++frame) {
+    auto it = frame->find(name);
+    if (it != frame->end())
+      return *it->second;
+  }
+  error(at.line, at.col,
+        "variable '" + name + "' is used before its declaration");
 }
 
 void SemanticChecker::check_assignable(const ExprNode &expr,
@@ -35,19 +37,22 @@ void SemanticChecker::check_assignable(const ExprNode &expr,
 }
 
 void SemanticChecker::visit_program(ProgramNode &node) {
+  scopes.push_back({});
   for (std::unique_ptr<StmtNode> &stmt : node.statements)
     stmt->accept(*this);
   node.exit->accept(*this);
+  scopes.pop_back();
 }
 
 void SemanticChecker::visit_decl(DeclNode &node) {
-  if (symbols.count(node.name))
+  if (scopes.back().count(node.name))
     error(node.line, node.col,
-          "variable '" + node.name + "' is already declared");
+          "variable '" + node.name + "' is already declared" +
+              (scopes.size() > 1 ? " in this block" : ""));
   check(*node.init);
   check_assignable(*node.init, node.type_name, node,
                    "initialise '" + node.name + "'");
-  symbols[node.name] = &node;
+  scopes.back()[node.name] = &node;
 }
 
 void SemanticChecker::visit_assign(AssignNode &node) {
@@ -62,6 +67,40 @@ void SemanticChecker::visit_assign(AssignNode &node) {
 }
 
 void SemanticChecker::visit_exit(ExitNode &node) { check(*node.value); }
+
+void SemanticChecker::visit_block(BlockNode &node) {
+  scopes.push_back({});
+  for (std::unique_ptr<StmtNode> &stmt : node.statements)
+    stmt->accept(*this);
+  if (node.exit)
+    node.exit->accept(*this);
+  scopes.pop_back();
+}
+
+void SemanticChecker::visit_if(IfNode &node) {
+  const std::string &type = check(*node.cond);
+  if (type != "bool")
+    error(node.line, node.col,
+          "the condition of 'if' must be bool, got " + type);
+  node.then_block->accept(*this);
+  if (node.else_block)
+    node.else_block->accept(*this);
+}
+
+void SemanticChecker::visit_while(WhileNode &node) {
+  const std::string &type = check(*node.cond);
+  if (type != "bool")
+    error(node.line, node.col,
+          "the condition of 'while' must be bool, got " + type);
+  node.body->accept(*this);
+}
+
+void SemanticChecker::visit_not(NotNode &node) {
+  const std::string &type = check(*node.operand);
+  if (type != "bool")
+    error(node.line, node.col, "cannot apply '!' to " + type);
+  node.type = "bool";
+}
 
 void SemanticChecker::visit_binop(BinOpNode &node) {
   const std::string &lt = check(*node.left);

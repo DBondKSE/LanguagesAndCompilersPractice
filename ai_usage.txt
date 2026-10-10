@@ -1,7 +1,14 @@
 Claude Code / Opus 5.5 used; Chat link unavailable, prompts used:
-1. Explain task 1 to me as if I were a 5 year old [w04-practice.pdf attached]
-2. Did I update EBNF correctly?
+1. Read the file and explain what needs to be done/changed in this project [w05-practice.pdf attached]
+2. Are NLs really necessary in this EBNF?
 3. Write and run all needed test cases in Docker llvm-practice container
-4. Split the test cases into ok/ and err/ folders, make sure they are correct in git
-5. Check the staged files according to w04-practice.pdf requirements and fix all the errors
-6. Write a short README.md for this project
+4. Based on the implemented if/else, add while 
+5. Check the staged files according to w05-practice.pdf requirements and fix all the errors
+6. Update README.md for this project with this task's changes
+7. Fix the issues from the comment on my PR:
+    What to fix:
+
+    Still open from the Practice 3 review: i32 x{} reports line 1:5: variable 'x' needs an initialiser in {}. The braces are there, the problem is the empty expression at } (1:7).
+    Small things:
+    2. input.txt is still in the root, and README starts with # w01-practice.
+    ignore the input.txt comment - I want it to remain in git

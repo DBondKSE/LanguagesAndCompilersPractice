@@ -3,6 +3,7 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Host.h"
@@ -25,6 +26,7 @@ class CodeGen : public Visitor {
   std::unique_ptr<Module> module;
   Type *i1, *i32, *i64;
   Function *printfFn;
+  Function *function;
   std::map<const DeclNode *, Value *> slots;
   Value *result = nullptr;
 
@@ -52,6 +54,20 @@ class CodeGen : public Visitor {
     return coerce(eval(node), node.type, want);
   }
 
+  Value *entry_alloca(Type *type, const std::string &name) {
+    IRBuilderBase::InsertPointGuard guard(builder);
+    BasicBlock &entry = function->getEntryBlock();
+    builder.SetInsertPoint(&entry, entry.getFirstNonPHIOrDbgOrAlloca());
+    return builder.CreateAlloca(type, nullptr, name);
+  }
+
+  void emit_block(BlockNode &block, BasicBlock *bb, BasicBlock *next_bb) {
+    builder.SetInsertPoint(bb);
+    block.accept(*this);
+    if (!builder.GetInsertBlock()->getTerminator())
+      builder.CreateBr(next_bb);
+  }
+
 public:
   CodeGen() {
     i1 = Type::getInt1Ty(ctx);
@@ -64,10 +80,10 @@ public:
     module->setTargetTriple(sys::getDefaultTargetTriple());
 #endif
 
-    Function *mainFn =
+    function =
         Function::Create(FunctionType::get(i32, false),
                          Function::ExternalLinkage, "main", module.get());
-    builder.SetInsertPoint(BasicBlock::Create(ctx, "entry", mainFn));
+    builder.SetInsertPoint(BasicBlock::Create(ctx, "entry", function));
 
     Type *i8ptr = PointerType::get(Type::getInt8Ty(ctx), 0);
     printfFn = Function::Create(FunctionType::get(i32, {i8ptr}, true),
@@ -75,7 +91,7 @@ public:
                                 module.get());
   }
 
-  const Module &getModule() const { return *module; }
+  Module &getModule() { return *module; }
 
   void visit_program(ProgramNode &node) override {
     for (std::unique_ptr<StmtNode> &stmt : node.statements)
@@ -85,8 +101,7 @@ public:
 
   void visit_decl(DeclNode &node) override {
     Value *init = eval_as(*node.init, node.type_name);
-    Value *slot =
-        builder.CreateAlloca(llvm_type(node.type_name), nullptr, node.name);
+    Value *slot = entry_alloca(llvm_type(node.type_name), node.name);
     builder.CreateStore(init, slot);
     slots[&node] = slot;
   }
@@ -113,6 +128,44 @@ public:
            value});
     }
     builder.CreateRet(ConstantInt::get(i32, 0));
+  }
+
+  void visit_block(BlockNode &node) override {
+    for (std::unique_ptr<StmtNode> &stmt : node.statements)
+      stmt->accept(*this);
+    if (node.exit)
+      node.exit->accept(*this);
+  }
+
+  void visit_if(IfNode &node) override {
+    Value *cond = eval(*node.cond);
+    BasicBlock *then_bb = BasicBlock::Create(ctx, "then", function);
+    BasicBlock *else_bb =
+        node.else_block ? BasicBlock::Create(ctx, "else", function) : nullptr;
+    BasicBlock *merge_bb = BasicBlock::Create(ctx, "merge", function);
+    builder.CreateCondBr(cond, then_bb, else_bb ? else_bb : merge_bb);
+
+    emit_block(*node.then_block, then_bb, merge_bb);
+    if (else_bb)
+      emit_block(*node.else_block, else_bb, merge_bb);
+    builder.SetInsertPoint(merge_bb);
+  }
+
+  void visit_while(WhileNode &node) override {
+    BasicBlock *cond_bb = BasicBlock::Create(ctx, "cond", function);
+    BasicBlock *body_bb = BasicBlock::Create(ctx, "body", function);
+    BasicBlock *end_bb = BasicBlock::Create(ctx, "end", function);
+    builder.CreateBr(cond_bb);
+
+    builder.SetInsertPoint(cond_bb);
+    builder.CreateCondBr(eval(*node.cond), body_bb, end_bb);
+
+    emit_block(*node.body, body_bb, cond_bb);
+    builder.SetInsertPoint(end_bb);
+  }
+
+  void visit_not(NotNode &node) override {
+    result = builder.CreateNot(eval(*node.operand), "not");
   }
 
   void visit_binop(BinOpNode &node) override {
@@ -148,6 +201,8 @@ public:
 int compile(ProgramNode &program, const char *out_path) {
   CodeGen codegen;
   program.accept(codegen);
+  if (verifyModule(codegen.getModule(), &errs()))
+    return 1;
 
   std::error_code ec;
   raw_fd_ostream out(out_path, ec);

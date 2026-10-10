@@ -10,7 +10,11 @@ class ProgramNode;
 class DeclNode;
 class AssignNode;
 class ExitNode;
+class BlockNode;
+class IfNode;
+class WhileNode;
 class BinOpNode;
+class NotNode;
 class VarNode;
 class ConstNode;
 class BoolNode;
@@ -22,7 +26,11 @@ public:
   virtual void visit_decl(DeclNode &node) = 0;
   virtual void visit_assign(AssignNode &node) = 0;
   virtual void visit_exit(ExitNode &node) = 0;
+  virtual void visit_block(BlockNode &node) = 0;
+  virtual void visit_if(IfNode &node) = 0;
+  virtual void visit_while(WhileNode &node) = 0;
   virtual void visit_binop(BinOpNode &node) = 0;
+  virtual void visit_not(NotNode &node) = 0;
   virtual void visit_var(VarNode &node) = 0;
   virtual void visit_const(ConstNode &node) = 0;
   virtual void visit_bool(BoolNode &node) = 0;
@@ -62,6 +70,18 @@ public:
   std::string label() const override { return "BinOp " + op; }
   std::vector<const Node *> children() const override {
     return {left.get(), right.get()};
+  }
+};
+
+class NotNode : public ExprNode {
+public:
+  std::unique_ptr<ExprNode> operand;
+  NotNode(uint64_t line, uint64_t col, std::unique_ptr<ExprNode> operand)
+      : ExprNode(line, col), operand(std::move(operand)) {}
+  void accept(Visitor &visitor) override { visitor.visit_not(*this); }
+  std::string label() const override { return "Not"; }
+  std::vector<const Node *> children() const override {
+    return {operand.get()};
   }
 };
 
@@ -142,6 +162,60 @@ public:
   std::string label() const override { return "Exit"; }
   std::vector<const Node *> children() const override {
     return {value.get()};
+  }
+};
+
+class BlockNode : public Node {
+public:
+  std::vector<std::unique_ptr<StmtNode>> statements;
+  std::unique_ptr<ExitNode> exit;
+  BlockNode(uint64_t line, uint64_t col,
+            std::vector<std::unique_ptr<StmtNode>> statements,
+            std::unique_ptr<ExitNode> exit)
+      : Node(line, col), statements(std::move(statements)),
+        exit(std::move(exit)) {}
+  void accept(Visitor &visitor) override { visitor.visit_block(*this); }
+  std::string label() const override { return "Block"; }
+  std::vector<const Node *> children() const override {
+    std::vector<const Node *> c;
+    for (const std::unique_ptr<StmtNode> &s : statements)
+      c.push_back(s.get());
+    if (exit)
+      c.push_back(exit.get());
+    return c;
+  }
+};
+
+class IfNode : public StmtNode {
+public:
+  std::unique_ptr<ExprNode> cond;
+  std::unique_ptr<BlockNode> then_block, else_block;
+  IfNode(uint64_t line, uint64_t col, std::unique_ptr<ExprNode> cond,
+         std::unique_ptr<BlockNode> then_block,
+         std::unique_ptr<BlockNode> else_block)
+      : StmtNode(line, col), cond(std::move(cond)),
+        then_block(std::move(then_block)), else_block(std::move(else_block)) {}
+  void accept(Visitor &visitor) override { visitor.visit_if(*this); }
+  std::string label() const override { return "If"; }
+  std::vector<const Node *> children() const override {
+    std::vector<const Node *> c = {cond.get(), then_block.get()};
+    if (else_block)
+      c.push_back(else_block.get());
+    return c;
+  }
+};
+
+class WhileNode : public StmtNode {
+public:
+  std::unique_ptr<ExprNode> cond;
+  std::unique_ptr<BlockNode> body;
+  WhileNode(uint64_t line, uint64_t col, std::unique_ptr<ExprNode> cond,
+            std::unique_ptr<BlockNode> body)
+      : StmtNode(line, col), cond(std::move(cond)), body(std::move(body)) {}
+  void accept(Visitor &visitor) override { visitor.visit_while(*this); }
+  std::string label() const override { return "While"; }
+  std::vector<const Node *> children() const override {
+    return {cond.get(), body.get()};
   }
 };
 

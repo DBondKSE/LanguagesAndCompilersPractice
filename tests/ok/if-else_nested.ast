@@ -1,0 +1,31 @@
+Program
+  Decl n i64 mut
+    Const 7
+  Decl kind i32 mut
+    Const 0
+  If
+    BinOp ==
+      Var n
+      Const 0
+    Block
+      Assign kind
+        Const 1
+    Block
+      If
+        BinOp ==
+          BinOp *
+            Var n
+            Const 2
+          Const 14
+        Block
+          Assign kind
+            Const 2
+        Block
+          Assign kind
+            Const 3
+      Assign n
+        BinOp +
+          Var n
+          Var kind
+  Exit
+    Var n
