@@ -1,0 +1,9 @@
+struct Point
+{
+    i32 mut x
+    fn ok := () -> bool
+    {
+        exit x
+    }
+}
+exit 0

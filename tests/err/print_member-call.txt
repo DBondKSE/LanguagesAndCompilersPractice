@@ -1,0 +1,7 @@
+struct Point
+{
+    i32 mut x
+}
+Point p{1}
+print(p.print())
+exit 0

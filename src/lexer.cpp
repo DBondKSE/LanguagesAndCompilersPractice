@@ -12,12 +12,13 @@ enum tok_state {
   COLON,
   EQUAL,
   BANG,
-  MINUS
+  MINUS,
+  STRING
 };
 
 static const std::set<std::string> keywords = {
     "i32", "i64", "bool", "mut", "exit", "true", "false",
-    "if", "else", "while", "struct", "fn"};
+    "if", "else", "while", "struct", "fn", "read", "print"};
 
 static const char *kind_name(tok_kind k) {
   switch (k) {
@@ -33,6 +34,8 @@ static const char *kind_name(tok_kind k) {
     return "operator";
   case TK_SEPARATOR:
     return "separator";
+  case TK_STRING:
+    return "string";
   case TK_ENDLINE:
     return "endline";
   }
@@ -88,6 +91,8 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         t.push_back({TK_BLOCK, std::string(1, (char)b), line, col});
       } else if (b == '-') {
         state = MINUS, start_col = col;
+      } else if (b == '"') {
+        state = STRING, start = i, start_col = col;
       } else if (b == '+' || b == '*' || b == '.') {
         t.push_back({TK_OPERATOR, std::string(1, (char)b), line, col});
       } else if (b == ',' || b == '(' || b == ')') {
@@ -138,6 +143,14 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         t.push_back({TK_OPERATOR, "!", line, start_col});
         state = START;
         continue;
+      }
+    } else if (state == STRING) {
+      if (eof || b == '\n')
+        error(line, start_col, "string literal is not closed on its line");
+      if (b == '"') {
+        t.push_back({TK_STRING, s.substr(start, i - start + 1), line,
+                     start_col});
+        state = START;
       }
     } else if (state == MINUS) {
       if (!eof && b == '>') {

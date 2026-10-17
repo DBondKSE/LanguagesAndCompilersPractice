@@ -1,0 +1,7 @@
+Point{x: 7, y: 3}
+Box{lo: Point{x: 7, y: 7}, hi: Point{x: 10, y: 9}}
+7
+true
+field of a result in a condition
+Box{lo: Point{x: 1, y: 1}, hi: Point{x: 2, y: 3}}
+Program exit with result 61

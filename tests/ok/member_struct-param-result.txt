@@ -1,0 +1,24 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+    fn plus := (Point o) -> Point
+    {
+        Point r{x + o.x, y + o.y}
+        exit r
+    }
+    fn dot := (Point o) -> i64
+    {
+        i64 r{x * o.x + y * o.y}
+        exit r
+    }
+}
+fn far := (Point p) -> i64
+{
+    Point q{p.plus(p)}
+    exit p.dot(q)
+}
+Point a{1, 2}
+Point d{10, 20}
+Point b{a.plus(d)}
+exit far(b)

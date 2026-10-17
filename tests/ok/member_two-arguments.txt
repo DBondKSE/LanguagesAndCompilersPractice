@@ -1,0 +1,16 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+    fn move := (i32 dx, i64 dy) -> i64
+    {
+        x := x + dx
+        i64 s{x + dy + y}
+        exit s
+    }
+}
+Point mut p{3, 4}
+i64 s{p.move(10, 3000000000)}
+print(s)
+print(p)
+exit p.x

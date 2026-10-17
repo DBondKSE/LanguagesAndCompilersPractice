@@ -1,0 +1,1 @@
+compilation error: line 17:20: 'p.moved(...).x' of type i32 has no fields

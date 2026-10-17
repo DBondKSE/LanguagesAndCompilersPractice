@@ -1,0 +1,10 @@
+struct Point
+{
+    i32 x
+    fn shift := (i32 dx) -> i32
+    {
+        x := x + dx
+        exit x
+    }
+}
+exit 0

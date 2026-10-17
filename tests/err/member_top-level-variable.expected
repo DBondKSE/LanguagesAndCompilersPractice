@@ -1,0 +1,1 @@
+compilation error: line 6:19: 'k' is not a parameter, a local variable or a field of struct 'Point'

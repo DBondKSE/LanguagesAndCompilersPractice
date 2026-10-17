@@ -1,8 +1,10 @@
 program ::= { struct } { fn } { statement } exit_stmt
-struct ::= "struct" ident NL "{" NL field_decl { field_decl } "}" NL
+struct ::= "struct" ident NL "{" NL field_decl { field_decl } { fn } "}" NL
 field_decl ::= type [ "mut" ] ident NL
 fn ::= "fn" ident ":=" "(" [ type ident { "," type ident } ] ")" "->" type NL block
-statement ::= decl | assign | if | while
+statement ::= decl | assign | if | while | print
+print ::= "print" "(" ( string | expr ) ")"
+string ::= '"' { any byte except '"' and newline } '"'
 decl ::= type [ "mut" ] ident init
 init ::= "{" value { "," value } "}"
 value ::= expr | init
@@ -15,6 +17,9 @@ exit_stmt ::= "exit" factor
 expr ::= arith [ ( "==" | "!=" ) arith ]
 arith ::= term { ( "+" | "-" ) term }
 term ::= factor { "*" factor }
-factor ::= number | "true" | "false" | ident | field | call | "!" factor
+factor ::= number | "true" | "false" | ident | field | call | member_call | result_field | read | "!" factor
+read ::= "read" "(" ")"
 field ::= ident "." ident { "." ident }
 call ::= ident "(" [ expr { "," expr } ] ")"
+member_call ::= ( ident | call | member_call | result_field ) { "." ident } "." ident "(" [ expr { "," expr } ] ")"
+result_field ::= ( call | member_call ) "." ident { "." ident }

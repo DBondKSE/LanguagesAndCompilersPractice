@@ -1,0 +1,15 @@
+struct Point
+{
+    i32 mut x
+    fn shift := (i32 dx) -> i32
+    {
+        x := x + dx
+        exit x
+    }
+    fn copy_shift := () -> i32
+    {
+        Point p{x}
+        exit p.shift(1)
+    }
+}
+exit 0

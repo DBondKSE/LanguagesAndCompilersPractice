@@ -26,11 +26,14 @@ class CodeGen : public Visitor {
   std::unique_ptr<Module> module;
   Type *i1, *i32, *i64;
   Function *printfFn;
+  Function *scanfFn = nullptr;
   Function *function;
   const FnNode *current_fn = nullptr;
   std::map<std::string, StructType *> struct_types;
   std::map<const FnNode *, Function *> functions;
   std::map<const DeclNode *, Value *> slots;
+  std::map<std::string, Value *> texts;
+  Value *self = nullptr;
   Value *result = nullptr;
 
   Type *llvm_type(const std::string &type) {
@@ -77,6 +80,93 @@ class CodeGen : public Visitor {
                                      chain(decl->name, links));
   }
 
+  Value *text(const std::string &s) {
+    auto it = texts.find(s);
+    if (it != texts.end())
+      return it->second;
+    return texts[s] = builder.CreateGlobalStringPtr(s);
+  }
+
+  void print(const std::string &format, std::vector<Value *> args = {}) {
+    args.insert(args.begin(), text(format));
+    builder.CreateCall(printfFn, args);
+  }
+
+  void print_value(Value *value, const std::string &type,
+                   const std::string &prefix, const std::string &suffix) {
+    if (type == "bool")
+      print(prefix + "%s" + suffix,
+            {builder.CreateSelect(value, text("true"), text("false"), "text")});
+    else
+      print(prefix + (type == "i64" ? "%lld" : "%d") + suffix, {value});
+  }
+
+  void print_struct(const StructNode &type, Value *object,
+                    const std::string &close) {
+    print(type.name + "{");
+    for (unsigned i = 0; i < type.fields.size(); i++) {
+      const FieldNode &field = *type.fields[i];
+      std::string label = (i ? ", " : "") + field.name + ": ";
+      Value *at = builder.CreateStructGEP(struct_types.at(type.name), object, i,
+                                          field.name);
+      if (field.struct_type) {
+        print(label);
+        print_struct(*field.struct_type, at, "}");
+      } else {
+        print_value(builder.CreateLoad(llvm_type(field.type_name), at,
+                                       field.name),
+                    field.type_name, label, "");
+      }
+    }
+    print(close);
+  }
+
+  void declare(const FnNode &fn, const std::string &name, bool member) {
+    std::vector<Type *> params;
+    if (member)
+      params.push_back(PointerType::get(ctx, 0));
+    for (const std::unique_ptr<ParamNode> &param : fn.params)
+      params.push_back(llvm_type(param->type_name));
+    functions[&fn] = Function::Create(
+        FunctionType::get(llvm_type(fn.result_type), params, false),
+        Function::ExternalLinkage, name, module.get());
+  }
+
+  void emit_fn(FnNode &node, const DeclNode *self_decl) {
+    IRBuilderBase::InsertPointGuard guard(builder);
+    Function *outer = function;
+    function = functions.at(&node);
+    current_fn = &node;
+    builder.SetInsertPoint(BasicBlock::Create(ctx, "entry", function));
+    unsigned first = 0;
+    if (self_decl) {
+      self = function->getArg(0);
+      self->setName("this");
+      slots[self_decl] = self;
+      first = 1;
+    }
+    for (unsigned i = 0; i < node.params.size(); i++) {
+      const ParamNode &param = *node.params[i];
+      Argument *arg = function->getArg(first + i);
+      arg->setName(param.name);
+      Value *slot = entry_alloca(arg->getType(), param.name + ".addr");
+      builder.CreateStore(arg, slot);
+      slots[&param] = slot;
+    }
+    node.body->accept(*this);
+    current_fn = nullptr;
+    self = nullptr;
+    function = outer;
+  }
+
+  Value *object_address(ExprNode &object) {
+    if (VarNode *var = dynamic_cast<VarNode *>(&object))
+      return address(var->decl, var->links);
+    Value *slot = entry_alloca(llvm_type(object.type), "tmp");
+    builder.CreateStore(eval(object), slot);
+    return slot;
+  }
+
   void emit_block(BlockNode &block, BasicBlock *bb, BasicBlock *next_bb) {
     builder.SetInsertPoint(bb);
     block.accept(*this);
@@ -112,14 +202,14 @@ public:
   void visit_program(ProgramNode &node) override {
     for (std::unique_ptr<StructNode> &s : node.structs)
       s->accept(*this);
-    for (std::unique_ptr<FnNode> &fn : node.functions) {
-      std::vector<Type *> params;
-      for (std::unique_ptr<ParamNode> &param : fn->params)
-        params.push_back(llvm_type(param->type_name));
-      functions[fn.get()] = Function::Create(
-          FunctionType::get(llvm_type(fn->result_type), params, false),
-          Function::ExternalLinkage, "fn_" + fn->name, module.get());
-    }
+    for (std::unique_ptr<StructNode> &s : node.structs)
+      for (std::unique_ptr<MemberFnNode> &m : s->methods)
+        declare(*m, s->name + "_" + m->name, true);
+    for (std::unique_ptr<FnNode> &fn : node.functions)
+      declare(*fn, "fn_" + fn->name, false);
+    for (std::unique_ptr<StructNode> &s : node.structs)
+      for (std::unique_ptr<MemberFnNode> &m : s->methods)
+        m->accept(*this);
     for (std::unique_ptr<FnNode> &fn : node.functions)
       fn->accept(*this);
     for (std::unique_ptr<StmtNode> &stmt : node.statements)
@@ -134,23 +224,10 @@ public:
     struct_types[node.name] = StructType::create(ctx, fields, node.name);
   }
 
-  void visit_fn(FnNode &node) override {
-    IRBuilderBase::InsertPointGuard guard(builder);
-    Function *outer = function;
-    function = functions.at(&node);
-    current_fn = &node;
-    builder.SetInsertPoint(BasicBlock::Create(ctx, "entry", function));
-    for (unsigned i = 0; i < node.params.size(); i++) {
-      const ParamNode &param = *node.params[i];
-      Argument *arg = function->getArg(i);
-      arg->setName(param.name);
-      Value *slot = entry_alloca(arg->getType(), param.name + ".addr");
-      builder.CreateStore(arg, slot);
-      slots[&param] = slot;
-    }
-    node.body->accept(*this);
-    current_fn = nullptr;
-    function = outer;
+  void visit_fn(FnNode &node) override { emit_fn(node, nullptr); }
+
+  void visit_member_fn(MemberFnNode &node) override {
+    emit_fn(node, node.self.get());
   }
 
   void visit_decl(DeclNode &node) override {
@@ -181,22 +258,32 @@ public:
       builder.CreateRet(eval_as(*node.value, current_fn->result_type));
       return;
     }
-    Value *value = eval_as(*node.value, "i64");
-    if (node.value->type == "bool") {
-      Value *text = builder.CreateSelect(
-          value, builder.CreateGlobalStringPtr("true"),
-          builder.CreateGlobalStringPtr("false"), "text");
-      builder.CreateCall(
-          printfFn,
-          {builder.CreateGlobalStringPtr("Program exit with result %s\n"),
-           text});
-    } else {
-      builder.CreateCall(
-          printfFn,
-          {builder.CreateGlobalStringPtr("Program exit with result %lld\n"),
-           value});
-    }
+    print_value(eval_as(*node.value, "i64"),
+                node.value->type == "bool" ? "bool" : "i64",
+                "Program exit with result ", "\n");
     builder.CreateRet(ConstantInt::get(i32, 0));
+  }
+
+  void visit_print(PrintNode &node) override {
+    if (!node.value) {
+      print("%s\n", {text(node.text)});
+      return;
+    }
+    if (!node.struct_type) {
+      print_value(eval(*node.value), node.value->type, "", "\n");
+      return;
+    }
+    print_struct(*node.struct_type, object_address(*node.value), "}\n");
+  }
+
+  void visit_read(ReadNode &) override {
+    if (!scanfFn)
+      scanfFn = Function::Create(
+          FunctionType::get(i32, {PointerType::get(ctx, 0)}, true),
+          Function::ExternalLinkage, "scanf", module.get());
+    Value *slot = entry_alloca(i32, "read.slot");
+    builder.CreateCall(scanfFn, {text("%d"), slot});
+    result = builder.CreateLoad(i32, slot, "read");
   }
 
   void visit_block(BlockNode &node) override {
@@ -259,12 +346,31 @@ public:
         node.links.empty() ? node.name : node.links.back().name);
   }
 
+  void call(const FnNode &fn, std::vector<Value *> args,
+            std::vector<std::unique_ptr<ExprNode>> &values,
+            const std::string &name) {
+    for (size_t i = 0; i < values.size(); i++)
+      args.push_back(eval_as(*values[i], fn.params[i]->type_name));
+    result = builder.CreateCall(functions.at(&fn), args, name);
+  }
+
   void visit_call(CallNode &node) override {
     std::vector<Value *> args;
-    for (size_t i = 0; i < node.args.size(); i++)
-      args.push_back(
-          eval_as(*node.args[i], node.fn->params[i]->type_name));
-    result = builder.CreateCall(functions.at(node.fn), args, node.name);
+    if (dynamic_cast<const MemberFnNode *>(node.fn))
+      args.push_back(self);
+    call(*node.fn, args, node.args, node.name);
+  }
+
+  void visit_member_call(MemberCallNode &node) override {
+    call(*node.fn, {object_address(*node.object)}, node.args, node.name);
+  }
+
+  void visit_field_of(FieldOfNode &node) override {
+    std::vector<unsigned> indices;
+    for (const Link &link : node.links)
+      indices.push_back(link.index);
+    result = builder.CreateExtractValue(eval(*node.object), indices,
+                                        node.links.back().name);
   }
 
   void visit_init(InitNode &node) override {

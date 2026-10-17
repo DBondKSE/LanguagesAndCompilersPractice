@@ -1,0 +1,28 @@
+struct Counter
+{
+    i32 mut n
+    fn even := (i32 k) -> bool
+    {
+        if k == 0
+        {
+            exit true
+        }
+        n := n + 1
+        exit odd(k - 1)
+    }
+    fn odd := (i32 k) -> bool
+    {
+        if k == 0
+        {
+            exit false
+        }
+        exit even(k - 1)
+    }
+}
+Counter mut c{0}
+bool e{c.even(7)}
+if e
+{
+    exit 1
+}
+exit c.n
