@@ -1,0 +1,10 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Point
+{
+    bool flag
+}
+exit 0

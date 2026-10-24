@@ -1,0 +1,20 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Circle
+    Field center Point const
+    Field radius i64 mut
+  Decl c Circle const
+    Init
+      Const 10
+      Const 20
+    Const 5
+  Decl sum i64 const
+    BinOp +
+      BinOp +
+        Var c.center.x
+        Var c.center.y
+      Var c.radius
+  Exit
+    Var sum

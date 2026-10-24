@@ -15,17 +15,25 @@ class Parser {
 
   const std::vector<token> *peek_line() const;
   void next_line();
-  const token *peek() const;
+  const token *peek(size_t ahead = 0) const;
   const token &eat();
   [[noreturn]] void fail(const std::string &msg) const;
   const token &expect(tok_kind kind, const std::string &text,
                       const std::string &what);
+  bool match(tok_kind kind, const std::string &text);
+  const token &expect_type(const std::string &what);
   void expect_end(const std::string &after = "the statement") const;
 
+  std::vector<Link> parse_links();
   std::unique_ptr<ExprNode> parse_factor();
   std::unique_ptr<ExprNode> parse_term();
   std::unique_ptr<ExprNode> parse_arith();
   std::unique_ptr<ExprNode> parse_expr();
+  token open_brace(const std::string &after);
+  std::unique_ptr<FieldNode> parse_field();
+  std::unique_ptr<StructNode> parse_struct();
+  std::unique_ptr<FnNode> parse_fn();
+  std::unique_ptr<InitNode> parse_init(const token &brace);
   std::unique_ptr<StmtNode> parse_decl();
   std::unique_ptr<StmtNode> parse_assign();
   std::unique_ptr<StmtNode> parse_if();

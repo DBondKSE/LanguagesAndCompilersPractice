@@ -1,0 +1,16 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Line
+{
+    Point mut from
+    Point mut to
+}
+Point a{1, 2}
+Point b{3, 4}
+Line mut l{a, b}
+Line other{b, a}
+l := other
+exit true

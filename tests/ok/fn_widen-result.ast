@@ -1,0 +1,18 @@
+Program
+  Fn wide i64
+    Param n i32
+    Block
+      If
+        BinOp ==
+          Var n
+          Const 0
+        Block
+          Exit
+            Const 0
+      Exit
+        Var n
+  Decl r i64 const
+    Call wide
+      Const 5
+  Exit
+    Var r

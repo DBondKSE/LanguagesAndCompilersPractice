@@ -1,0 +1,23 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Line
+    Field from Point mut
+    Field to Point mut
+  Decl a Point const
+    Const 1
+    Const 2
+  Decl b Point const
+    Const 3
+    Const 4
+  Decl l Line mut
+    Var a
+    Var b
+  Decl other Line const
+    Var b
+    Var a
+  Assign l
+    Var other
+  Exit
+    Bool true

@@ -1,0 +1,37 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Circle
+    Field center Point const
+    Field radius i32 mut
+  Struct Ring
+    Field outer Circle const
+    Field inner Circle const
+  Decl a Point const
+    Const 10
+    Const 20
+  Decl b Point const
+    Const 3
+    Const 4
+  Decl big Circle const
+    Var a
+    Const 9
+  Decl small Circle const
+    Var b
+    Const 2
+  Decl g Ring const
+    Var big
+    Var small
+  Decl sum i32 const
+    BinOp +
+      BinOp +
+        BinOp +
+          Var g.outer.center.x
+          BinOp *
+            Var g.inner.center.y
+            Var g.inner.radius
+        Var g.outer.radius
+      Var g.outer.center.x
+  Exit
+    Var sum

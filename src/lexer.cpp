@@ -11,11 +11,13 @@ enum tok_state {
   NUMBER,
   COLON,
   EQUAL,
-  BANG
+  BANG,
+  MINUS
 };
 
 static const std::set<std::string> keywords = {
-    "i32", "i64", "bool", "mut", "exit", "true", "false", "if", "else", "while"};
+    "i32", "i64", "bool", "mut", "exit", "true", "false",
+    "if", "else", "while", "struct", "fn"};
 
 static const char *kind_name(tok_kind k) {
   switch (k) {
@@ -29,6 +31,8 @@ static const char *kind_name(tok_kind k) {
     return "block";
   case TK_OPERATOR:
     return "operator";
+  case TK_SEPARATOR:
+    return "separator";
   case TK_ENDLINE:
     return "endline";
   }
@@ -82,8 +86,12 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         state = BANG, start_col = col;
       } else if (b == '{' || b == '}') {
         t.push_back({TK_BLOCK, std::string(1, (char)b), line, col});
-      } else if (b == '+' || b == '-' || b == '*') {
+      } else if (b == '-') {
+        state = MINUS, start_col = col;
+      } else if (b == '+' || b == '*' || b == '.') {
         t.push_back({TK_OPERATOR, std::string(1, (char)b), line, col});
+      } else if (b == ',' || b == '(' || b == ')') {
+        t.push_back({TK_SEPARATOR, std::string(1, (char)b), line, col});
       } else {
         error(line, col, "unexpected byte '" + show_byte(b) + "'");
       }
@@ -128,6 +136,15 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         state = START;
       } else {
         t.push_back({TK_OPERATOR, "!", line, start_col});
+        state = START;
+        continue;
+      }
+    } else if (state == MINUS) {
+      if (!eof && b == '>') {
+        t.push_back({TK_SEPARATOR, "->", line, start_col});
+        state = START;
+      } else {
+        t.push_back({TK_OPERATOR, "-", line, start_col});
         state = START;
         continue;
       }

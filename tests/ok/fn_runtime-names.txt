@@ -1,0 +1,10 @@
+fn main := () -> i32
+{
+    exit 1
+}
+fn printf := (i32 n) -> i32
+{
+    i32 sum{n + main()}
+    exit sum
+}
+exit printf(2)

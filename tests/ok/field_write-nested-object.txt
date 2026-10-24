@@ -1,0 +1,17 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Disc
+{
+    Point mut center
+    i64 mut radius
+    bool filled
+}
+Point p{1, 2}
+Point q{3, 4}
+Disc mut d{p, 3, true}
+d.center := q
+i32 sum{d.center.x + d.center.y}
+exit sum

@@ -1,0 +1,6 @@
+struct Point
+{
+    i32 x
+    i64 x
+}
+exit 0

@@ -1,0 +1,8 @@
+if true
+{
+    struct Point
+    {
+        i32 x
+    }
+}
+exit 0

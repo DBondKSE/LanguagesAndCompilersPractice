@@ -7,6 +7,8 @@
 #include <vector>
 
 class ProgramNode;
+class StructNode;
+class FnNode;
 class DeclNode;
 class AssignNode;
 class ExitNode;
@@ -16,6 +18,8 @@ class WhileNode;
 class BinOpNode;
 class NotNode;
 class VarNode;
+class CallNode;
+class InitNode;
 class ConstNode;
 class BoolNode;
 
@@ -23,6 +27,8 @@ class Visitor {
 public:
   virtual ~Visitor() = default;
   virtual void visit_program(ProgramNode &node) = 0;
+  virtual void visit_struct(StructNode &node) = 0;
+  virtual void visit_fn(FnNode &node) = 0;
   virtual void visit_decl(DeclNode &node) = 0;
   virtual void visit_assign(AssignNode &node) = 0;
   virtual void visit_exit(ExitNode &node) = 0;
@@ -32,6 +38,8 @@ public:
   virtual void visit_binop(BinOpNode &node) = 0;
   virtual void visit_not(NotNode &node) = 0;
   virtual void visit_var(VarNode &node) = 0;
+  virtual void visit_call(CallNode &node) = 0;
+  virtual void visit_init(InitNode &node) = 0;
   virtual void visit_const(ConstNode &node) = 0;
   virtual void visit_bool(BoolNode &node) = 0;
 };
@@ -85,14 +93,46 @@ public:
   }
 };
 
+struct Link {
+  std::string name;
+  uint64_t col;
+  unsigned index = 0;
+};
+
+inline std::string chain(std::string name, const std::vector<Link> &links) {
+  for (const Link &link : links)
+    name += "." + link.name;
+  return name;
+}
+
 class VarNode : public ExprNode {
 public:
   std::string name;
+  std::vector<Link> links;
   const DeclNode *decl = nullptr;
-  VarNode(uint64_t line, uint64_t col, std::string name)
-      : ExprNode(line, col), name(std::move(name)) {}
+  VarNode(uint64_t line, uint64_t col, std::string name,
+          std::vector<Link> links)
+      : ExprNode(line, col), name(std::move(name)), links(std::move(links)) {}
   void accept(Visitor &visitor) override { visitor.visit_var(*this); }
-  std::string label() const override { return "Var " + name; }
+  std::string label() const override { return "Var " + chain(name, links); }
+};
+
+class CallNode : public ExprNode {
+public:
+  std::string name;
+  std::vector<std::unique_ptr<ExprNode>> args;
+  const FnNode *fn = nullptr;
+  CallNode(uint64_t line, uint64_t col, std::string name,
+           std::vector<std::unique_ptr<ExprNode>> args)
+      : ExprNode(line, col), name(std::move(name)), args(std::move(args)) {}
+  void accept(Visitor &visitor) override { visitor.visit_call(*this); }
+  std::string label() const override { return "Call " + name; }
+  std::vector<const Node *> children() const override {
+    std::vector<const Node *> c;
+    for (const std::unique_ptr<ExprNode> &a : args)
+      c.push_back(a.get());
+    return c;
+  }
 };
 
 class ConstNode : public ExprNode {
@@ -116,38 +156,114 @@ public:
   }
 };
 
+class InitNode : public ExprNode {
+public:
+  std::vector<std::unique_ptr<ExprNode>> values;
+  const StructNode *struct_type = nullptr;
+  bool copy = false;
+  InitNode(uint64_t line, uint64_t col,
+           std::vector<std::unique_ptr<ExprNode>> values)
+      : ExprNode(line, col), values(std::move(values)) {}
+  void accept(Visitor &visitor) override { visitor.visit_init(*this); }
+  std::string label() const override { return "Init"; }
+  std::vector<const Node *> children() const override {
+    std::vector<const Node *> c;
+    for (const std::unique_ptr<ExprNode> &v : values)
+      c.push_back(v.get());
+    return c;
+  }
+};
+
 class StmtNode : public Node {
 public:
   using Node::Node;
 };
 
+class FieldNode : public Node {
+public:
+  std::string type_name;
+  uint64_t type_col;
+  std::string name;
+  bool mut;
+  const StructNode *struct_type = nullptr;
+  FieldNode(uint64_t line, uint64_t col, std::string type_name,
+            uint64_t type_col, std::string name, bool mut)
+      : Node(line, col), type_name(std::move(type_name)), type_col(type_col),
+        name(std::move(name)), mut(mut) {}
+  void accept(Visitor &) override {}
+  std::string label() const override {
+    return "Field " + name + " " + type_name + (mut ? " mut" : " const");
+  }
+};
+
+class StructNode : public Node {
+public:
+  std::string name;
+  std::vector<std::unique_ptr<FieldNode>> fields;
+  StructNode(uint64_t line, uint64_t col, std::string name,
+             std::vector<std::unique_ptr<FieldNode>> fields)
+      : Node(line, col), name(std::move(name)), fields(std::move(fields)) {}
+  void accept(Visitor &visitor) override { visitor.visit_struct(*this); }
+  std::string label() const override { return "Struct " + name; }
+  std::vector<const Node *> children() const override {
+    std::vector<const Node *> c;
+    for (const std::unique_ptr<FieldNode> &f : fields)
+      c.push_back(f.get());
+    return c;
+  }
+};
+
 class DeclNode : public StmtNode {
 public:
   std::string type_name;
+  uint64_t type_col;
   std::string name;
   bool mut;
-  std::unique_ptr<ExprNode> init;
+  std::unique_ptr<InitNode> init;
+  const StructNode *struct_type = nullptr;
   DeclNode(uint64_t line, uint64_t col, std::string type_name,
-           std::string name, bool mut, std::unique_ptr<ExprNode> init)
+           uint64_t type_col, std::string name, bool mut,
+           std::unique_ptr<InitNode> init)
       : StmtNode(line, col), type_name(std::move(type_name)),
-        name(std::move(name)), mut(mut), init(std::move(init)) {}
+        type_col(type_col), name(std::move(name)), mut(mut),
+        init(std::move(init)) {}
   void accept(Visitor &visitor) override { visitor.visit_decl(*this); }
   std::string label() const override {
     return "Decl " + name + " " + type_name + (mut ? " mut" : " const");
   }
-  std::vector<const Node *> children() const override { return {init.get()}; }
+  std::vector<const Node *> children() const override {
+    return init->children();
+  }
+};
+
+class ParamNode : public DeclNode {
+public:
+  ParamNode(uint64_t line, uint64_t col, std::string type_name,
+            uint64_t type_col, std::string name)
+      : DeclNode(line, col, std::move(type_name), type_col, std::move(name),
+                 false, nullptr) {}
+  void accept(Visitor &) override {}
+  std::string label() const override {
+    return "Param " + name + " " + type_name;
+  }
+  std::vector<const Node *> children() const override { return {}; }
 };
 
 class AssignNode : public StmtNode {
 public:
   std::string name;
+  std::vector<Link> links;
   std::unique_ptr<ExprNode> value;
   const DeclNode *decl = nullptr;
+  std::string type;
   AssignNode(uint64_t line, uint64_t col, std::string name,
-             std::unique_ptr<ExprNode> value)
-      : StmtNode(line, col), name(std::move(name)), value(std::move(value)) {}
+             std::vector<Link> links, std::unique_ptr<ExprNode> value)
+      : StmtNode(line, col), name(std::move(name)), links(std::move(links)),
+        value(std::move(value)) {}
   void accept(Visitor &visitor) override { visitor.visit_assign(*this); }
-  std::string label() const override { return "Assign " + name; }
+  std::string label() const override {
+    return "Assign " + chain(name, links);
+  }
   std::vector<const Node *> children() const override {
     return {value.get()};
   }
@@ -219,19 +335,55 @@ public:
   }
 };
 
+class FnNode : public Node {
+public:
+  std::string name;
+  std::vector<std::unique_ptr<ParamNode>> params;
+  std::string result_type;
+  uint64_t result_col;
+  std::unique_ptr<BlockNode> body;
+  FnNode(uint64_t line, uint64_t col, std::string name,
+         std::vector<std::unique_ptr<ParamNode>> params,
+         std::string result_type, uint64_t result_col,
+         std::unique_ptr<BlockNode> body)
+      : Node(line, col), name(std::move(name)), params(std::move(params)),
+        result_type(std::move(result_type)), result_col(result_col),
+        body(std::move(body)) {}
+  void accept(Visitor &visitor) override { visitor.visit_fn(*this); }
+  std::string label() const override {
+    return "Fn " + name + " " + result_type;
+  }
+  std::vector<const Node *> children() const override {
+    std::vector<const Node *> c;
+    for (const std::unique_ptr<ParamNode> &p : params)
+      c.push_back(p.get());
+    c.push_back(body.get());
+    return c;
+  }
+};
+
 class ProgramNode : public Node {
 public:
+  std::vector<std::unique_ptr<StructNode>> structs;
+  std::vector<std::unique_ptr<FnNode>> functions;
   std::vector<std::unique_ptr<StmtNode>> statements;
   std::unique_ptr<ExitNode> exit;
   ProgramNode(uint64_t line, uint64_t col,
+              std::vector<std::unique_ptr<StructNode>> structs,
+              std::vector<std::unique_ptr<FnNode>> functions,
               std::vector<std::unique_ptr<StmtNode>> statements,
               std::unique_ptr<ExitNode> exit)
-      : Node(line, col), statements(std::move(statements)),
+      : Node(line, col), structs(std::move(structs)),
+        functions(std::move(functions)), statements(std::move(statements)),
         exit(std::move(exit)) {}
   void accept(Visitor &visitor) override { visitor.visit_program(*this); }
   std::string label() const override { return "Program"; }
   std::vector<const Node *> children() const override {
     std::vector<const Node *> c;
+    for (const std::unique_ptr<StructNode> &s : structs)
+      c.push_back(s.get());
+    for (const std::unique_ptr<FnNode> &f : functions)
+      c.push_back(f.get());
     for (const std::unique_ptr<StmtNode> &s : statements)
       c.push_back(s.get());
     c.push_back(exit.get());

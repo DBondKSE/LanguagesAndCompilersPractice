@@ -1,0 +1,28 @@
+Program
+  Fn bump i32
+    Param x i32
+    Block
+      Decl total i32 const
+        BinOp +
+          Var x
+          Const 1
+      If
+        Bool true
+        Block
+          Decl x i32 const
+            BinOp *
+              Var total
+              Const 2
+          Exit
+            Var x
+      Exit
+        Var total
+  Decl x i32 const
+    Const 5
+  Decl total i32 const
+    BinOp -
+      Call bump
+        Var x
+      Const 1
+  Exit
+    Var total

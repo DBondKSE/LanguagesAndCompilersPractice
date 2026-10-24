@@ -1,0 +1,16 @@
+fn firstPowerAbove := (i32 limit) -> i32
+{
+    i32 mut p{1}
+    i32 mut left{limit}
+    while true
+    {
+        if left == 0
+        {
+            exit p
+        }
+        p := p * 2
+        left := left - 1
+    }
+    exit 0
+}
+exit firstPowerAbove(6)

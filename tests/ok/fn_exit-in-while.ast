@@ -1,0 +1,31 @@
+Program
+  Fn firstPowerAbove i32
+    Param limit i32
+    Block
+      Decl p i32 mut
+        Const 1
+      Decl left i32 mut
+        Var limit
+      While
+        Bool true
+        Block
+          If
+            BinOp ==
+              Var left
+              Const 0
+            Block
+              Exit
+                Var p
+          Assign p
+            BinOp *
+              Var p
+              Const 2
+          Assign left
+            BinOp -
+              Var left
+              Const 1
+      Exit
+        Const 0
+  Exit
+    Call firstPowerAbove
+      Const 6

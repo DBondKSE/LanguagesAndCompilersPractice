@@ -1,0 +1,11 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+Point p{10, 20}
+fn first := (Point q) -> i32
+{
+    exit q.x
+}
+exit first(p)

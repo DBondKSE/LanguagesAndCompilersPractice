@@ -1,0 +1,13 @@
+fn bump := (i32 x) -> i32
+{
+    i32 total{x + 1}
+    if true
+    {
+        i32 x{total * 2}
+        exit x
+    }
+    exit total
+}
+i32 x{5}
+i32 total{bump(x) - 1}
+exit total

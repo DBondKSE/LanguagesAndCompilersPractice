@@ -1,0 +1,10 @@
+fn wide := (i32 n) -> i64
+{
+    if n == 0
+    {
+        exit 0
+    }
+    exit n
+}
+i64 r{wide(5)}
+exit r

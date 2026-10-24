@@ -1,0 +1,29 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Fn scale i64
+    Param value i64
+    Param by i64
+    Block
+      Decl product i64 const
+        BinOp *
+          Var value
+          Var by
+      Exit
+        Var product
+  Decl p Point const
+    Const 10
+    Const 20
+  Decl three i32 const
+    Const 3
+  Decl result i64 const
+    BinOp +
+      Call scale
+        Const 9000000000
+        Const 1
+      Call scale
+        Var p.x
+        Var three
+  Exit
+    Var result

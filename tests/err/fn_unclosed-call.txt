@@ -1,0 +1,6 @@
+fn f := (i32 x) -> i32
+{
+    exit x
+}
+i32 y{f(1}
+exit y

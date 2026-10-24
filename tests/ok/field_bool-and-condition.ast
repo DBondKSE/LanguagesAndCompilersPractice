@@ -1,0 +1,38 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+  Struct Disc
+    Field center Point mut
+    Field radius i64 mut
+    Field filled bool const
+  Decl p Point const
+    Const 1
+    Const 2
+  Decl d Disc mut
+    Var p
+    Const 3
+    Bool true
+  Decl steps i32 mut
+    Const 0
+  While
+    BinOp !=
+      Var d.radius
+      Const 5
+    Block
+      Assign d.radius
+        BinOp +
+          Var d.radius
+          Const 1
+      Assign steps
+        BinOp +
+          Var steps
+          Const 1
+  If
+    Not
+      Var d.filled
+    Block
+      Exit
+        Const 0
+  Exit
+    Var steps

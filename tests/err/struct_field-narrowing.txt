@@ -1,0 +1,8 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+i64 big{1}
+Point p{big, 2}
+exit 0

@@ -1,0 +1,31 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+struct Circle
+{
+    Point center
+    i64 mut radius
+}
+struct Ring
+{
+    Circle outer
+    Circle inner
+}
+fn origin := () -> Point
+{
+    Point o{0, 0}
+    exit o
+}
+fn double := (i32 n) -> i32
+{
+    i32 twice{n * 2}
+    exit twice
+}
+i32 small{3}
+Point p{1, 2}
+Ring g{{origin(), 9000000000}, {p, double(small)}}
+Ring h{g.outer, {{double(2), small}, small}}
+i64 sum{g.outer.radius + g.inner.radius + h.inner.center.x + h.inner.radius}
+exit sum

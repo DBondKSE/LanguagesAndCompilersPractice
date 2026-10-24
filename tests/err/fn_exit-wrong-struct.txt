@@ -1,0 +1,10 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+}
+fn bad := (Point p) -> Point
+{
+    exit 0
+}
+exit 0

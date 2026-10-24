@@ -1,0 +1,17 @@
+Program
+  Fn addBig i64
+    Param a i64
+    Param b i64
+    Block
+      Decl sum i64 const
+        BinOp +
+          Var a
+          Var b
+      Exit
+        Var sum
+  Decl small i32 const
+    Const 7
+  Exit
+    Call addBig
+      Var small
+      Const 9000000000

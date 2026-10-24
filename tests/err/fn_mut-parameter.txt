@@ -1,0 +1,5 @@
+fn f := (i32 mut x) -> i32
+{
+    exit x
+}
+exit 0
