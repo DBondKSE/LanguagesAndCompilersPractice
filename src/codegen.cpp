@@ -135,6 +135,8 @@ class CodeGen : public Visitor {
   void emit_fn(FnNode &node, const DeclNode *self_decl) {
     IRBuilderBase::InsertPointGuard guard(builder);
     Function *outer = function;
+    const FnNode *outer_fn = current_fn;
+    Value *outer_self = self;
     function = functions.at(&node);
     current_fn = &node;
     builder.SetInsertPoint(BasicBlock::Create(ctx, "entry", function));
@@ -154,8 +156,8 @@ class CodeGen : public Visitor {
       slots[&param] = slot;
     }
     node.body->accept(*this);
-    current_fn = nullptr;
-    self = nullptr;
+    current_fn = outer_fn;
+    self = outer_self;
     function = outer;
   }
 
@@ -394,6 +396,15 @@ public:
 
   void visit_bool(BoolNode &node) override {
     result = ConstantInt::get(i1, node.value);
+  }
+
+  void visit_lambda(LambdaNode &node) override {
+    StructNode &closure = *node.closure;
+    visit_struct(closure);
+    MemberFnNode &call = *closure.methods[0];
+    declare(call, closure.name + "_call", true);
+    call.accept(*this);
+    node.var->accept(*this);
   }
 };
 

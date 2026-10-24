@@ -1,0 +1,51 @@
+struct Counter
+{
+    i32 mut n
+    fn call := () -> i32
+    {
+        n := n + 1
+        exit n
+    }
+}
+struct Add
+{
+    i64 base
+    fn call := (i64 a, i64 b) -> i64
+    {
+        i64 r{base + a + b}
+        exit r
+    }
+}
+struct Box
+{
+    Counter mut ticks
+    Add add
+    fn tick := () -> i32
+    {
+        exit ticks()
+    }
+}
+fn apply := (Add f, i32 x) -> i64
+{
+    exit f(x, x)
+}
+fn boxed := (i64 base) -> Box
+{
+    Box b{{0}, {base}}
+    exit b
+}
+Counter mut c{0}
+while c() != 3
+{
+    print(c.n)
+}
+Box mut b{{10}, {100}}
+print(b.tick())
+print(b.ticks())
+print(b.ticks.call())
+print(b)
+Add plus{1}
+print(apply(plus, 5))
+print(boxed(1000).add(1, 2))
+print(plus(apply(plus, 1), c()))
+exit plus(c(), 2)

@@ -1,0 +1,1 @@
+compilation error: line 16:1: cannot assign to 'next': it is a lambda, and a lambda cannot be assigned

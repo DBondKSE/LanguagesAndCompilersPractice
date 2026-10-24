@@ -1,0 +1,14 @@
+i32 mut i{0}
+i32 mut total{0}
+while i != 3
+{
+    fn add_i := [i](i32 v) -> i32
+    {
+        i32 r{v + i}
+        exit r
+    }
+    i := i + 1
+    total := add_i(total * 10)
+    print(add_i(0))
+}
+exit total

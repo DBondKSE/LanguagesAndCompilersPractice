@@ -233,7 +233,13 @@ template <class Fn> std::unique_ptr<Fn> Parser::parse_fn() {
   eat();
   token name = expect(TK_IDENT, "", "a function name");
   expect(TK_OPERATOR, ":=", "':=' after '" + name.text + "'");
-  expect(TK_SEPARATOR, "(", "'(' after ':='");
+  return parse_signature<Fn>(name, "':='");
+}
+
+template <class Fn>
+std::unique_ptr<Fn> Parser::parse_signature(const token &name,
+                                            const std::string &after) {
+  expect(TK_SEPARATOR, "(", "'(' after " + after);
   std::vector<std::unique_ptr<ParamNode>> params;
   if (!match(TK_SEPARATOR, ")")) {
     do {
@@ -257,6 +263,33 @@ template <class Fn> std::unique_ptr<Fn> Parser::parse_fn() {
                               std::move(body));
 }
 
+bool Parser::at_lambda() const {
+  const token *name = peek(1), *assign = peek(2), *bracket = peek(3);
+  return name && name->kind == TK_IDENT && assign &&
+         is(*assign, TK_OPERATOR, ":=") && bracket &&
+         is(*bracket, TK_SEPARATOR, "[");
+}
+
+std::unique_ptr<StmtNode> Parser::parse_lambda() {
+  eat();
+  token name = eat();
+  eat();
+  eat();
+  std::vector<Capture> captures;
+  if (!match(TK_SEPARATOR, "]")) {
+    do {
+      bool mut = match(TK_KEYWORD, "mut");
+      const token &capture = expect(TK_IDENT, "", "a captured variable name");
+      captures.push_back({capture.text, capture.line, capture.col, mut});
+    } while (match(TK_SEPARATOR, ","));
+    expect(TK_SEPARATOR, "]", "']'");
+  }
+  std::unique_ptr<MemberFnNode> call =
+      parse_signature<MemberFnNode>(name, "']'");
+  return std::make_unique<LambdaNode>(name.line, name.col, name.text,
+                                      std::move(captures), std::move(call));
+}
+
 std::unique_ptr<StructNode> Parser::parse_struct() {
   eat();
   token name = expect(TK_IDENT, "", "a struct name");
@@ -274,6 +307,9 @@ std::unique_ptr<StructNode> Parser::parse_struct() {
       break;
     next_line();
     if (is(first, TK_KEYWORD, "fn")) {
+      if (at_lambda())
+        error(peek(3)->line, peek(3)->col,
+              "a member function cannot have a capture list");
       if (fields.empty())
         error(first.line, first.col,
               "a member function cannot come before the first field of "
@@ -452,6 +488,8 @@ std::unique_ptr<StmtNode> Parser::parse_statement() {
     error(tok.line, tok.col, "'}' without a '{'");
   if (is(tok, TK_KEYWORD, "struct"))
     error(tok.line, tok.col, "a struct can be declared only at the top level");
+  if (is(tok, TK_KEYWORD, "fn") && at_lambda())
+    return parse_lambda();
   if (is(tok, TK_KEYWORD, "fn"))
     error(tok.line, tok.col,
           "a function can be declared only at the top level");
@@ -482,6 +520,8 @@ std::unique_ptr<ProgramNode> Parser::parse_program() {
         error(first.line, first.col,
               "a struct must be declared before the first function");
       structs.push_back(parse_struct());
+    } else if (is(first, TK_KEYWORD, "fn") && at_lambda()) {
+      statements.push_back(parse_lambda());
     } else if (is(first, TK_KEYWORD, "fn")) {
       if (!statements.empty())
         error(first.line, first.col,

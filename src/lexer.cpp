@@ -95,7 +95,7 @@ std::vector<std::vector<token>> tokenize(const std::string &s) {
         state = STRING, start = i, start_col = col;
       } else if (b == '+' || b == '*' || b == '.') {
         t.push_back({TK_OPERATOR, std::string(1, (char)b), line, col});
-      } else if (b == ',' || b == '(' || b == ')') {
+      } else if (b == ',' || b == '(' || b == ')' || b == '[' || b == ']') {
         t.push_back({TK_SEPARATOR, std::string(1, (char)b), line, col});
       } else {
         error(line, col, "unexpected byte '" + show_byte(b) + "'");

@@ -1,12 +1,26 @@
 #include "semantic.h"
 #include "error.h"
 
+#include <set>
+
 static bool is_integer(const std::string &type) {
   return type == "i32" || type == "i64";
 }
 
 static bool is_builtin(const std::string &type) {
   return is_integer(type) || type == "bool";
+}
+
+static bool is_lambda(const std::string &type) {
+  return type.rfind("lambda.", 0) == 0;
+}
+
+static const FieldNode *field_named(const StructNode &type,
+                                    const std::string &name) {
+  for (const std::unique_ptr<FieldNode> &field : type.fields)
+    if (field->name == name)
+      return field.get();
+  return nullptr;
 }
 
 static InitNode *as_init(ExprNode &node) {
@@ -39,13 +53,47 @@ const std::string &SemanticChecker::check(ExprNode &node) {
   return node.type;
 }
 
+const std::string &SemanticChecker::check(std::unique_ptr<ExprNode> &slot) {
+  check(*slot);
+  if (replacement)
+    slot = std::move(replacement);
+  return slot->type;
+}
+
 const DeclNode *SemanticChecker::find(const std::string &name) const {
-  for (auto frame = scopes.rbegin(); frame != scopes.rend(); ++frame) {
-    auto it = frame->find(name);
-    if (it != frame->end())
+  for (size_t i = scopes.size(); i > barrier; i--) {
+    auto it = scopes[i - 1].find(name);
+    if (it != scopes[i - 1].end())
       return it->second;
   }
   return nullptr;
+}
+
+bool SemanticChecker::visible_outside(const std::string &name) const {
+  for (size_t i = 0; i < barrier; i++)
+    if (scopes[i].count(name))
+      return true;
+  return enclosing && field_named(*enclosing->owner, name);
+}
+
+void SemanticChecker::not_captured(const std::string &name,
+                                   const Node &at) const {
+  error(at.line, at.col,
+        "'" + name + "' is not captured by lambda '" + current_lambda->name +
+            "': add it to the capture list, [" + name + "]");
+}
+
+void SemanticChecker::reject_lambda(const ExprNode &value,
+                                    const std::string &action,
+                                    const std::string &holder) const {
+  if (!is_lambda(value.type))
+    return;
+  const VarNode &var = dynamic_cast<const VarNode &>(value);
+  std::string name = var.own_field ? var.links.front().name : var.name;
+  error(value.line, value.col,
+        "'" + name + "' is a lambda and cannot " + action +
+            ": its type has no name" +
+            (holder.empty() ? "" : ", so no " + holder + " can have it"));
 }
 
 const DeclNode &SemanticChecker::lookup(const std::string &name,
@@ -71,12 +119,7 @@ bool SemanticChecker::is_self(const DeclNode &decl) const {
 }
 
 bool SemanticChecker::is_own_field(const std::string &name) const {
-  if (!current_member)
-    return false;
-  for (const std::unique_ptr<FieldNode> &field : current_member->owner->fields)
-    if (field->name == name)
-      return true;
-  return false;
+  return current_member && field_named(*current_member->owner, name);
 }
 
 const DeclNode &SemanticChecker::root(const std::string &name,
@@ -88,7 +131,9 @@ const DeclNode &SemanticChecker::root(const std::string &name,
     links.insert(links.begin(), Link{name, at.col});
     return *current_member->self;
   }
-  if (current_member)
+  if (current_lambda && visible_outside(name))
+    not_captured(name, at);
+  if (current_member && !current_lambda)
     error(at.line, at.col,
           "'" + name +
               "' is not a parameter, a local variable or a field of struct '" +
@@ -113,6 +158,9 @@ std::string SemanticChecker::const_link(const VarNode &object) const {
   const StructNode *owner = decl.struct_type;
   for (const Link &link : object.links) {
     const FieldNode &field = *owner->fields[link.index];
+    if (!field.mut && current_lambda && is_self(decl) &&
+        &link == &object.links.front())
+      return "the capture '" + link.name + "' is const";
     if (!field.mut)
       return "field '" + link.name + "' is not mut";
     owner = field.struct_type;
@@ -123,23 +171,31 @@ std::string SemanticChecker::const_link(const VarNode &object) const {
 void SemanticChecker::check_mutation(const MemberCallNode &call,
                                      const std::string &target,
                                      const std::string &blocker) const {
-  if (call.fn->mutating)
+  if (!call.fn->mutating)
+    return;
+  if (!call.callee.empty())
     error(call.line, call.col,
-          "cannot call '" + call.name + "' on '" + target +
-              "': it changes the object and " + blocker);
+          "cannot call '" + target + "': its 'call' changes it, and " +
+              blocker);
+  error(call.line, call.col,
+        "cannot call '" + call.name + "' on '" + target +
+            "': it changes the object and " + blocker);
 }
 
 void SemanticChecker::mark_mutating(ProgramNode &program) {
+  std::vector<MemberFnNode *> members(lambdas);
+  for (std::unique_ptr<StructNode> &s : program.structs)
+    for (std::unique_ptr<MemberFnNode> &m : s->methods)
+      members.push_back(m.get());
   bool changed = true;
   while (changed) {
     changed = false;
-    for (std::unique_ptr<StructNode> &s : program.structs)
-      for (std::unique_ptr<MemberFnNode> &m : s->methods)
-        for (const MemberFnNode *callee : m->self_calls)
-          if (!m->mutating && callee->mutating) {
-            m->mutating = true;
-            changed = true;
-          }
+    for (MemberFnNode *m : members)
+      for (const MemberFnNode *callee : m->self_calls)
+        if (!m->mutating && callee->mutating) {
+          m->mutating = true;
+          changed = true;
+        }
   }
 }
 
@@ -155,12 +211,15 @@ const StructNode *SemanticChecker::resolve_type(const std::string &type,
 }
 
 static std::string show(const ExprNode &expr) {
-  if (const VarNode *v = dynamic_cast<const VarNode *>(&expr))
+  if (const VarNode *v = dynamic_cast<const VarNode *>(&expr)) {
+    if (v->own_field)
+      return chain(v->name, {v->links.begin() + 1, v->links.end()});
     return chain(v->name, v->links);
+  }
   if (const CallNode *c = dynamic_cast<const CallNode *>(&expr))
     return c->name + (c->args.empty() ? "()" : "(...)");
   if (const MemberCallNode *m = dynamic_cast<const MemberCallNode *>(&expr))
-    return show(*m->object) + "." + m->name +
+    return (m->callee.empty() ? show(*m->object) + "." + m->name : m->callee) +
            (m->args.empty() ? "()" : "(...)");
   const FieldOfNode &f = dynamic_cast<const FieldOfNode &>(expr);
   return chain(show(*f.object), f.links);
@@ -186,6 +245,11 @@ const FieldNode *SemanticChecker::walk_links(std::string path,
     if (!owner)
       error(line, link.col,
             "'" + path + "' of type " + *type + " has no fields");
+    if (is_lambda(owner->name) &&
+        !(current_lambda && owner == current_member->owner))
+      error(line, link.col,
+            "'" + path +
+                "' is a lambda: its captures are not visible outside its body");
     field = nullptr;
     for (unsigned i = 0; i < owner->fields.size() && !field; i++) {
       if (owner->fields[i]->name == link.name) {
@@ -330,10 +394,12 @@ void SemanticChecker::visit_decl(DeclNode &node) {
     check(init);
   } else {
     check_count(init, 1);
-    ExprNode &value = *init.values[0];
-    if (!as_init(value))
-      check(value);
-    check_value(value, node.type_name, nullptr, node, "'" + node.name + "'");
+    if (!as_init(*init.values[0]))
+      check(init.values[0]);
+    reject_lambda(*init.values[0], "initialise '" + node.name + "'",
+                  "variable");
+    check_value(*init.values[0], node.type_name, nullptr, node,
+                "'" + node.name + "'");
   }
   scopes.back()[node.name] = &node;
 }
@@ -357,9 +423,13 @@ void SemanticChecker::check_value(ExprNode &value, const std::string &type,
 void SemanticChecker::visit_init(InitNode &node) {
   const std::vector<std::unique_ptr<FieldNode>> &fields =
       node.struct_type->fields;
-  for (std::unique_ptr<ExprNode> &value : node.values)
-    if (!as_init(*value))
-      check(*value);
+  for (std::unique_ptr<ExprNode> &value : node.values) {
+    if (as_init(*value))
+      continue;
+    check(value);
+    if (!is_lambda(node.type))
+      reject_lambda(*value, "initialise a field of " + node.type, "field");
+  }
   node.copy = node.values.size() == 1 && node.values[0]->type == node.type;
   if (node.copy)
     return;
@@ -373,17 +443,32 @@ void SemanticChecker::visit_assign(AssignNode &node) {
   std::string target = chain(node.name, node.links);
   std::string object = node.links.empty() ? "it" : "'" + node.name + "'";
   const DeclNode &decl = root(node.name, node.links, node);
+  std::string lambda_target = "cannot assign to '" + target +
+                              "': it is a lambda, and a lambda cannot be "
+                              "assigned";
+  if (node.links.empty() && is_lambda(decl.type_name))
+    error(node.line, node.col, lambda_target);
   if (dynamic_cast<const ParamNode *>(&decl))
     error(node.line, node.col,
           "cannot assign to '" + target + "': " + object + " is a parameter");
   if (!decl.mut)
     error(node.line, node.col,
           "cannot assign to '" + target + "': " + object + " is not mut");
+  if (current_lambda && is_self(decl)) {
+    const std::string &capture = node.links.front().name;
+    if (!field_named(*current_member->owner, capture)->mut)
+      error(node.line, node.col,
+            "cannot assign to '" + target + "': the capture '" + capture +
+                "' is const, write [mut " + capture + "]");
+  }
   const FieldNode *field = resolve_links(decl, node.links, node.line, true);
   if (is_self(decl))
     current_member->mutating = true;
   node.decl = &decl;
+  node.own_field = is_self(decl);
   node.type = field ? field->type_name : decl.type_name;
+  if (is_lambda(node.type))
+    error(node.line, node.col, lambda_target);
   const StructNode *replaced = field ? field->struct_type : decl.struct_type;
   if (replaced) {
     std::string inner = const_field(*replaced);
@@ -392,13 +477,18 @@ void SemanticChecker::visit_assign(AssignNode &node) {
             "cannot assign to '" + target + "': its field '" + inner +
                 "' is not mut");
   }
-  check(*node.value);
+  check(node.value);
+  reject_lambda(*node.value, "be assigned", "");
   check_assignable(*node.value, node.type, node, "assign to '" + target + "'");
 }
 
 void SemanticChecker::visit_exit(ExitNode &node) {
-  const std::string &type = check(*node.value);
-  if (current_fn)
+  const std::string &type = check(node.value);
+  reject_lambda(*node.value, "be the value of exit", "");
+  if (current_lambda)
+    check_assignable(*node.value, current_fn->result_type, *node.value,
+                     "exit lambda '" + current_lambda->name + "'");
+  else if (current_fn)
     check_assignable(*node.value, current_fn->result_type, *node.value,
                      "exit function '" + current_fn->name + "'");
   else if (!is_builtin(type))
@@ -416,7 +506,7 @@ void SemanticChecker::visit_block(BlockNode &node) {
 }
 
 void SemanticChecker::visit_if(IfNode &node) {
-  const std::string &type = check(*node.cond);
+  const std::string &type = check(node.cond);
   if (type != "bool")
     error(node.line, node.col,
           "the condition of 'if' must be bool, got " + type);
@@ -426,7 +516,7 @@ void SemanticChecker::visit_if(IfNode &node) {
 }
 
 void SemanticChecker::visit_while(WhileNode &node) {
-  const std::string &type = check(*node.cond);
+  const std::string &type = check(node.cond);
   if (type != "bool")
     error(node.line, node.col,
           "the condition of 'while' must be bool, got " + type);
@@ -434,15 +524,15 @@ void SemanticChecker::visit_while(WhileNode &node) {
 }
 
 void SemanticChecker::visit_not(NotNode &node) {
-  const std::string &type = check(*node.operand);
+  const std::string &type = check(node.operand);
   if (type != "bool")
     error(node.line, node.col, "cannot apply '!' to " + type);
   node.type = "bool";
 }
 
 void SemanticChecker::visit_binop(BinOpNode &node) {
-  const std::string &lt = check(*node.left);
-  const std::string &rt = check(*node.right);
+  const std::string &lt = check(node.left);
+  const std::string &rt = check(node.right);
   if (node.op == "==" || node.op == "!=") {
     if (is_integer(lt) != is_integer(rt) || !is_builtin(lt) || !is_builtin(rt))
       error(node.line, node.col, "cannot compare " + lt + " with " + rt);
@@ -457,6 +547,7 @@ void SemanticChecker::visit_binop(BinOpNode &node) {
 
 void SemanticChecker::visit_var(VarNode &node) {
   node.decl = &root(node.name, node.links, node);
+  node.own_field = is_self(*node.decl);
   const FieldNode *field =
       resolve_links(*node.decl, node.links, node.line, false);
   node.type = field ? field->type_name : node.decl->type_name;
@@ -472,20 +563,45 @@ void SemanticChecker::check_args(std::vector<std::unique_ptr<ExprNode>> &args,
               std::to_string(params.size()) + ", got " +
               std::to_string(args.size()));
   for (size_t i = 0; i < params.size(); i++) {
-    check(*args[i]);
+    check(args[i]);
+    reject_lambda(*args[i], "be passed to '" + name + "'", "parameter");
     check_assignable(*args[i], params[i]->type_name, *args[i],
                      "initialise parameter '" + params[i]->name + "'");
   }
 }
 
 void SemanticChecker::visit_call(CallNode &node) {
-  const MemberFnNode *own =
-      current_member ? method(*current_member->owner, node.name) : nullptr;
+  const MemberFnNode *own = current_member && !current_lambda
+                                ? method(*current_member->owner, node.name)
+                                : nullptr;
+  bool variable = find(node.name) || is_own_field(node.name);
+  if (variable && (own || functions.count(node.name)))
+    error(node.line, node.col,
+          "'" + node.name +
+              "' is both a variable and a function: rename one of them");
+  if (variable) {
+    std::unique_ptr<MemberCallNode> call = std::make_unique<MemberCallNode>(
+        node.line, node.col,
+        std::make_unique<VarNode>(node.line, node.col, node.name,
+                                  std::vector<Link>{}),
+        node.col, "call", std::move(node.args));
+    call->callee = node.name;
+    call->accept(*this);
+    replacement = std::move(call);
+    return;
+  }
   if (own) {
     current_member->self_calls.push_back(own);
     node.fn = own;
   } else {
     auto it = functions.find(node.name);
+    if (it == functions.end() && current_lambda &&
+        node.name == current_lambda->name)
+      error(node.line, node.col,
+            "lambda '" + node.name +
+                "' cannot call itself: its name is declared after its body");
+    if (it == functions.end() && current_lambda && visible_outside(node.name))
+      not_captured(node.name, node);
     if (it == functions.end())
       error(node.line, node.col,
             "function '" + node.name + "' is not declared");
@@ -503,17 +619,51 @@ void SemanticChecker::visit_member_call(MemberCallNode &node) {
     error(object->line, object->col,
           "cannot call '" + node.name + "' on type '" + object->name +
               "': a member function is called on an object");
-  const std::string &type = check(*node.object);
+  std::string type = check(node.object);
   auto owner = structs.find(type);
-  if (owner == structs.end())
+  if (node.callee.empty() && owner != structs.end()) {
+    const std::vector<std::unique_ptr<FieldNode>> &fields =
+        owner->second->fields;
+    for (unsigned i = 0; i < fields.size(); i++) {
+      if (fields[i]->name != node.name)
+        continue;
+      if (is_lambda(type))
+        error(node.line, node.col,
+              "'" + target +
+                  "' is a lambda: its captures are not visible outside its "
+                  "body");
+      Link link{node.name, node.col, i};
+      if (object)
+        object->links.push_back(link);
+      else
+        node.object = std::make_unique<FieldOfNode>(
+            node.line, node.dot_col, std::move(node.object),
+            std::vector<Link>{link});
+      node.object->type = type = fields[i]->type_name;
+      node.callee = target = target + "." + node.name;
+      node.name = "call";
+      owner = structs.find(type);
+      break;
+    }
+  }
+  if (owner == structs.end()) {
+    if (!node.callee.empty())
+      error(node.line, node.col,
+            "'" + target + "' is not callable: it is " + type);
     error(node.line, object ? node.col : node.dot_col,
           "cannot call '" + node.name + "' on '" + target + "' of type " +
               type);
+  }
   node.fn = method(*owner->second, node.name);
+  if (!node.fn && !node.callee.empty())
+    error(node.line, node.col,
+          "'" + target + "' is not callable: " + type +
+              " has no member function 'call'");
   if (!node.fn)
     error(node.line, node.col,
           "struct " + type + " has no member function '" + node.name + "'");
-  check_args(node.args, *node.fn, node.name, node);
+  check_args(node.args, *node.fn, node.callee.empty() ? node.name : target,
+             node);
   node.type = node.fn->result_type;
   if (!object)
     return;
@@ -530,7 +680,7 @@ void SemanticChecker::visit_member_call(MemberCallNode &node) {
 
 void SemanticChecker::visit_field_of(FieldOfNode &node) {
   std::string target = show(*node.object);
-  const std::string &type = check(*node.object);
+  const std::string &type = check(node.object);
   auto owner = structs.find(type);
   if (owner == structs.end())
     error(node.line, node.col,
@@ -560,7 +710,79 @@ void SemanticChecker::visit_read(ReadNode &node) { node.type = "i32"; }
 void SemanticChecker::visit_print(PrintNode &node) {
   if (!node.value)
     return;
-  const std::string &type = check(*node.value);
+  const std::string &type = check(node.value);
+  reject_lambda(*node.value, "be printed", "");
   if (!is_builtin(type))
     node.struct_type = structs.at(type);
+}
+
+void SemanticChecker::visit_lambda(LambdaNode &node) {
+  std::set<std::string> seen;
+  std::vector<std::unique_ptr<FieldNode>> fields;
+  std::vector<std::unique_ptr<ExprNode>> values;
+  for (const Capture &capture : node.captures) {
+    if (!seen.insert(capture.name).second)
+      error(capture.line, capture.col,
+            "'" + capture.name + "' is captured twice");
+    const DeclNode *decl = find(capture.name);
+    const FieldNode *field =
+        decl || !current_member
+            ? nullptr
+            : field_named(*current_member->owner, capture.name);
+    if (!decl && !field)
+      error(capture.line, capture.col,
+            "cannot capture '" + capture.name + "': no variable '" +
+                capture.name + "' is visible here");
+    fields.push_back(std::make_unique<FieldNode>(
+        capture.line, capture.col, decl ? decl->type_name : field->type_name,
+        capture.col, capture.name, capture.mut));
+    fields.back()->struct_type = decl ? decl->struct_type : field->struct_type;
+    values.push_back(std::make_unique<VarNode>(
+        capture.line, capture.col, capture.name, std::vector<Link>{}));
+  }
+  for (const std::unique_ptr<ParamNode> &param : node.call->params)
+    if (seen.count(param->name))
+      error(param->line, param->col,
+            "parameter '" + param->name +
+                "' has the same name as a capture of lambda '" + node.name +
+                "'");
+
+  std::string base = "lambda." + node.name, type = base;
+  for (int i = 2; structs.count(type); i++)
+    type = base + "." + std::to_string(i);
+  node.call->name = "call";
+  MemberFnNode &call = *node.call;
+  std::vector<std::unique_ptr<MemberFnNode>> methods;
+  methods.push_back(std::move(node.call));
+  node.closure = std::make_unique<StructNode>(
+      node.line, node.col, type, std::move(fields), std::move(methods));
+  structs[type] = node.closure.get();
+  declare_params(call);
+  lambdas.push_back(&call);
+
+  size_t outer_barrier = barrier;
+  const FnNode *outer_fn = current_fn;
+  MemberFnNode *outer_member = current_member;
+  const MemberFnNode *outer_enclosing = enclosing;
+  const LambdaNode *outer_lambda = current_lambda;
+  barrier = scopes.size();
+  enclosing = current_member;
+  current_lambda = &node;
+  call.accept(*this);
+  barrier = outer_barrier;
+  current_fn = outer_fn;
+  current_member = outer_member;
+  enclosing = outer_enclosing;
+  current_lambda = outer_lambda;
+  for (const MemberFnNode *callee : call.self_calls)
+    if (callee->mutating)
+      call.mutating = true;
+
+  bool mut = false;
+  for (const Capture &capture : node.captures)
+    mut = mut || capture.mut;
+  node.var = std::make_unique<DeclNode>(
+      node.line, node.col, type, node.col, node.name, mut,
+      std::make_unique<InitNode>(node.line, node.col, std::move(values)));
+  node.var->accept(*this);
 }
