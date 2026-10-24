@@ -11,6 +11,7 @@ enum tok_kind {
   TK_BLOCK,
   TK_OPERATOR,
   TK_SEPARATOR,
+  TK_STRING,
   TK_ENDLINE
 };
 

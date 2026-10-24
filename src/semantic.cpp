@@ -39,17 +39,108 @@ const std::string &SemanticChecker::check(ExprNode &node) {
   return node.type;
 }
 
-const DeclNode &SemanticChecker::lookup(const std::string &name,
-                                        const Node &at) const {
+const DeclNode *SemanticChecker::find(const std::string &name) const {
   for (auto frame = scopes.rbegin(); frame != scopes.rend(); ++frame) {
     auto it = frame->find(name);
     if (it != frame->end())
-      return *it->second;
+      return it->second;
   }
+  return nullptr;
+}
+
+const DeclNode &SemanticChecker::lookup(const std::string &name,
+                                        const Node &at) const {
+  if (const DeclNode *decl = find(name))
+    return *decl;
   if (functions.count(name))
     error(at.line, at.col, "'" + name + "' is a function, not a variable");
   error(at.line, at.col,
         "variable '" + name + "' is used before its declaration");
+}
+
+static const MemberFnNode *method(const StructNode &type,
+                                  const std::string &name) {
+  for (const std::unique_ptr<MemberFnNode> &m : type.methods)
+    if (m->name == name)
+      return m.get();
+  return nullptr;
+}
+
+bool SemanticChecker::is_self(const DeclNode &decl) const {
+  return current_member && &decl == current_member->self.get();
+}
+
+bool SemanticChecker::is_own_field(const std::string &name) const {
+  if (!current_member)
+    return false;
+  for (const std::unique_ptr<FieldNode> &field : current_member->owner->fields)
+    if (field->name == name)
+      return true;
+  return false;
+}
+
+const DeclNode &SemanticChecker::root(const std::string &name,
+                                      std::vector<Link> &links,
+                                      const Node &at) const {
+  if (const DeclNode *decl = find(name))
+    return *decl;
+  if (is_own_field(name)) {
+    links.insert(links.begin(), Link{name, at.col});
+    return *current_member->self;
+  }
+  if (current_member)
+    error(at.line, at.col,
+          "'" + name +
+              "' is not a parameter, a local variable or a field of struct '" +
+              current_member->owner->name + "'");
+  return lookup(name, at);
+}
+
+std::string SemanticChecker::display(const DeclNode &decl,
+                                     const std::vector<Link> &links) const {
+  if (!is_self(decl))
+    return chain(decl.name, links);
+  return chain(links.front().name,
+               std::vector<Link>(links.begin() + 1, links.end()));
+}
+
+std::string SemanticChecker::const_link(const VarNode &object) const {
+  const DeclNode &decl = *object.decl;
+  if (dynamic_cast<const ParamNode *>(&decl))
+    return "'" + decl.name + "' is a parameter";
+  if (!decl.mut)
+    return "'" + decl.name + "' is not mut";
+  const StructNode *owner = decl.struct_type;
+  for (const Link &link : object.links) {
+    const FieldNode &field = *owner->fields[link.index];
+    if (!field.mut)
+      return "field '" + link.name + "' is not mut";
+    owner = field.struct_type;
+  }
+  return "";
+}
+
+void SemanticChecker::check_mutation(const MemberCallNode &call,
+                                     const std::string &target,
+                                     const std::string &blocker) const {
+  if (call.fn->mutating)
+    error(call.line, call.col,
+          "cannot call '" + call.name + "' on '" + target +
+              "': it changes the object and " + blocker);
+}
+
+void SemanticChecker::mark_mutating(ProgramNode &program) {
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (std::unique_ptr<StructNode> &s : program.structs)
+      for (std::unique_ptr<MemberFnNode> &m : s->methods)
+        for (const MemberFnNode *callee : m->self_calls)
+          if (!m->mutating && callee->mutating) {
+            m->mutating = true;
+            changed = true;
+          }
+  }
 }
 
 const StructNode *SemanticChecker::resolve_type(const std::string &type,
@@ -63,13 +154,33 @@ const StructNode *SemanticChecker::resolve_type(const std::string &type,
   return it->second;
 }
 
+static std::string show(const ExprNode &expr) {
+  if (const VarNode *v = dynamic_cast<const VarNode *>(&expr))
+    return chain(v->name, v->links);
+  if (const CallNode *c = dynamic_cast<const CallNode *>(&expr))
+    return c->name + (c->args.empty() ? "()" : "(...)");
+  if (const MemberCallNode *m = dynamic_cast<const MemberCallNode *>(&expr))
+    return show(*m->object) + "." + m->name +
+           (m->args.empty() ? "()" : "(...)");
+  const FieldOfNode &f = dynamic_cast<const FieldOfNode &>(expr);
+  return chain(show(*f.object), f.links);
+}
+
 const FieldNode *SemanticChecker::resolve_links(const DeclNode &decl,
                                                 std::vector<Link> &links,
                                                 uint64_t line,
                                                 bool write) const {
-  std::string path = decl.name;
-  const std::string *type = &decl.type_name;
-  const StructNode *owner = decl.struct_type;
+  return walk_links(is_self(decl) ? "" : decl.name, decl.type_name,
+                    decl.struct_type, links, line, write ? &decl : nullptr);
+}
+
+const FieldNode *SemanticChecker::walk_links(std::string path,
+                                             const std::string &type_name,
+                                             const StructNode *owner,
+                                             std::vector<Link> &links,
+                                             uint64_t line,
+                                             const DeclNode *written) const {
+  const std::string *type = &type_name;
   const FieldNode *field = nullptr;
   for (Link &link : links) {
     if (!owner)
@@ -85,11 +196,11 @@ const FieldNode *SemanticChecker::resolve_links(const DeclNode &decl,
     if (!field)
       error(line, link.col,
             "struct " + *type + " has no field '" + link.name + "'");
-    if (write && !field->mut)
+    if (written && !field->mut)
       error(line, link.col,
-            "cannot assign to '" + chain(decl.name, links) + "': field '" +
+            "cannot assign to '" + display(*written, links) + "': field '" +
                 link.name + "' is not mut");
-    path += "." + link.name;
+    path += (path.empty() ? "" : ".") + link.name;
     type = &field->type_name;
     owner = field->struct_type;
   }
@@ -114,10 +225,20 @@ void SemanticChecker::check_assignable(const ExprNode &expr,
 void SemanticChecker::visit_program(ProgramNode &node) {
   for (std::unique_ptr<StructNode> &s : node.structs)
     s->accept(*this);
+  for (std::unique_ptr<StructNode> &s : node.structs)
+    for (std::unique_ptr<MemberFnNode> &m : s->methods)
+      declare_params(*m);
   for (std::unique_ptr<FnNode> &fn : node.functions)
     declare_fn(*fn);
+  for (std::unique_ptr<StructNode> &s : node.structs)
+    for (std::unique_ptr<MemberFnNode> &m : s->methods)
+      m->accept(*this);
   for (std::unique_ptr<FnNode> &fn : node.functions)
     fn->accept(*this);
+  mark_mutating(node);
+  for (const PendingCall &p : pending)
+    check_mutation(*p.call, p.target, p.blocker);
+  mutation_known = true;
   scopes.push_back({});
   for (std::unique_ptr<StmtNode> &stmt : node.statements)
     stmt->accept(*this);
@@ -141,6 +262,18 @@ void SemanticChecker::visit_struct(StructNode &node) {
             "field '" + field->name + "' is already declared in struct '" +
                 node.name + "'");
   }
+  std::map<std::string, const MemberFnNode *> methods;
+  for (std::unique_ptr<MemberFnNode> &method : node.methods) {
+    if (seen.count(method->name))
+      error(method->line, method->col,
+            "member function '" + method->name +
+                "' has the same name as a field of struct '" + node.name +
+                "'");
+    if (!methods.emplace(method->name, method.get()).second)
+      error(method->line, method->col,
+            "member function '" + method->name +
+                "' is already declared in struct '" + node.name + "'");
+  }
   structs[node.name] = &node;
 }
 
@@ -148,6 +281,11 @@ void SemanticChecker::declare_fn(FnNode &node) {
   if (functions.count(node.name))
     error(node.line, node.col,
           "function '" + node.name + "' is already declared");
+  declare_params(node);
+  functions[node.name] = &node;
+}
+
+void SemanticChecker::declare_params(FnNode &node) {
   std::map<std::string, const ParamNode *> seen;
   for (std::unique_ptr<ParamNode> &param : node.params) {
     param->struct_type =
@@ -157,10 +295,17 @@ void SemanticChecker::declare_fn(FnNode &node) {
             "parameter '" + param->name + "' is already declared");
   }
   resolve_type(node.result_type, node.line, node.result_col);
-  functions[node.name] = &node;
 }
 
-void SemanticChecker::visit_fn(FnNode &node) {
+void SemanticChecker::visit_fn(FnNode &node) { check_body(node); }
+
+void SemanticChecker::visit_member_fn(MemberFnNode &node) {
+  current_member = &node;
+  check_body(node);
+  current_member = nullptr;
+}
+
+void SemanticChecker::check_body(FnNode &node) {
   current_fn = &node;
   scopes.push_back({});
   for (std::unique_ptr<ParamNode> &param : node.params)
@@ -225,9 +370,9 @@ void SemanticChecker::visit_init(InitNode &node) {
 }
 
 void SemanticChecker::visit_assign(AssignNode &node) {
-  const DeclNode &decl = lookup(node.name, node);
   std::string target = chain(node.name, node.links);
   std::string object = node.links.empty() ? "it" : "'" + node.name + "'";
+  const DeclNode &decl = root(node.name, node.links, node);
   if (dynamic_cast<const ParamNode *>(&decl))
     error(node.line, node.col,
           "cannot assign to '" + target + "': " + object + " is a parameter");
@@ -235,6 +380,8 @@ void SemanticChecker::visit_assign(AssignNode &node) {
     error(node.line, node.col,
           "cannot assign to '" + target + "': " + object + " is not mut");
   const FieldNode *field = resolve_links(decl, node.links, node.line, true);
+  if (is_self(decl))
+    current_member->mutating = true;
   node.decl = &decl;
   node.type = field ? field->type_name : decl.type_name;
   const StructNode *replaced = field ? field->struct_type : decl.struct_type;
@@ -309,30 +456,88 @@ void SemanticChecker::visit_binop(BinOpNode &node) {
 }
 
 void SemanticChecker::visit_var(VarNode &node) {
-  node.decl = &lookup(node.name, node);
+  node.decl = &root(node.name, node.links, node);
   const FieldNode *field =
       resolve_links(*node.decl, node.links, node.line, false);
   node.type = field ? field->type_name : node.decl->type_name;
 }
 
-void SemanticChecker::visit_call(CallNode &node) {
-  auto it = functions.find(node.name);
-  if (it == functions.end())
-    error(node.line, node.col,
-          "function '" + node.name + "' is not declared");
-  node.fn = it->second;
-  const std::vector<std::unique_ptr<ParamNode>> &params = node.fn->params;
-  if (node.args.size() != params.size())
-    error(node.line, node.col,
-          "wrong number of arguments for '" + node.name + "': expected " +
+void SemanticChecker::check_args(std::vector<std::unique_ptr<ExprNode>> &args,
+                                 const FnNode &fn, const std::string &name,
+                                 const Node &at) {
+  const std::vector<std::unique_ptr<ParamNode>> &params = fn.params;
+  if (args.size() != params.size())
+    error(at.line, at.col,
+          "wrong number of arguments for '" + name + "': expected " +
               std::to_string(params.size()) + ", got " +
-              std::to_string(node.args.size()));
+              std::to_string(args.size()));
   for (size_t i = 0; i < params.size(); i++) {
-    check(*node.args[i]);
-    check_assignable(*node.args[i], params[i]->type_name, *node.args[i],
+    check(*args[i]);
+    check_assignable(*args[i], params[i]->type_name, *args[i],
                      "initialise parameter '" + params[i]->name + "'");
   }
+}
+
+void SemanticChecker::visit_call(CallNode &node) {
+  const MemberFnNode *own =
+      current_member ? method(*current_member->owner, node.name) : nullptr;
+  if (own) {
+    current_member->self_calls.push_back(own);
+    node.fn = own;
+  } else {
+    auto it = functions.find(node.name);
+    if (it == functions.end())
+      error(node.line, node.col,
+            "function '" + node.name + "' is not declared");
+    node.fn = it->second;
+  }
+  check_args(node.args, *node.fn, node.name, node);
   node.type = node.fn->result_type;
+}
+
+void SemanticChecker::visit_member_call(MemberCallNode &node) {
+  VarNode *object = dynamic_cast<VarNode *>(node.object.get());
+  std::string target = show(*node.object);
+  if (object && object->links.empty() && !find(object->name) &&
+      !is_own_field(object->name) && structs.count(object->name))
+    error(object->line, object->col,
+          "cannot call '" + node.name + "' on type '" + object->name +
+              "': a member function is called on an object");
+  const std::string &type = check(*node.object);
+  auto owner = structs.find(type);
+  if (owner == structs.end())
+    error(node.line, object ? node.col : node.dot_col,
+          "cannot call '" + node.name + "' on '" + target + "' of type " +
+              type);
+  node.fn = method(*owner->second, node.name);
+  if (!node.fn)
+    error(node.line, node.col,
+          "struct " + type + " has no member function '" + node.name + "'");
+  check_args(node.args, *node.fn, node.name, node);
+  node.type = node.fn->result_type;
+  if (!object)
+    return;
+  if (is_self(*object->decl))
+    current_member->self_calls.push_back(node.fn);
+  std::string blocker = const_link(*object);
+  if (blocker.empty())
+    return;
+  if (mutation_known)
+    check_mutation(node, target, blocker);
+  else
+    pending.push_back({&node, target, blocker});
+}
+
+void SemanticChecker::visit_field_of(FieldOfNode &node) {
+  std::string target = show(*node.object);
+  const std::string &type = check(*node.object);
+  auto owner = structs.find(type);
+  if (owner == structs.end())
+    error(node.line, node.col,
+          "'" + target + "' of type " + type + " has no fields");
+  node.type = walk_links(target, type, owner->second, node.links, node.line,
+                         nullptr)
+                  ->type_name;
 }
 
 void SemanticChecker::visit_const(ConstNode &node) {
@@ -349,3 +554,13 @@ void SemanticChecker::visit_const(ConstNode &node) {
 }
 
 void SemanticChecker::visit_bool(BoolNode &node) { node.type = "bool"; }
+
+void SemanticChecker::visit_read(ReadNode &node) { node.type = "i32"; }
+
+void SemanticChecker::visit_print(PrintNode &node) {
+  if (!node.value)
+    return;
+  const std::string &type = check(*node.value);
+  if (!is_builtin(type))
+    node.struct_type = structs.at(type);
+}

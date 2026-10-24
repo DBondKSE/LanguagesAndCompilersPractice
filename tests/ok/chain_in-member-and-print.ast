@@ -1,0 +1,108 @@
+Program
+  Struct Point
+    Field x i32 mut
+    Field y i32 mut
+    MemberFn moved -> Point
+      Param dx i32
+      Block
+        Decl q Point const
+          BinOp +
+            Var x
+            Var dx
+          Var y
+        Exit
+          Var q
+    MemberFn shift -> i32
+      Param dx i32
+      Block
+        Assign x
+          BinOp +
+            Var x
+            Var dx
+        Exit
+          Var x
+    MemberFn far -> i32
+      Block
+        Exit
+          MemberCall shift
+            MemberCall moved
+              Call moved
+                Const 10
+              Const 20
+            Const 30
+  Struct Box
+    Field lo Point const
+    Field hi Point const
+    MemberFn wider -> Box
+      Param d i32
+      Block
+        Decl b Box const
+          Var lo
+          MemberCall moved
+            Var hi
+            Var d
+        Exit
+          Var b
+  Fn make Box
+    Param v i32
+    Block
+      Decl b Box const
+        Init
+          Var v
+          Var v
+        Init
+          BinOp +
+            Var v
+            Const 1
+          BinOp +
+            Var v
+            Const 2
+      Exit
+        Var b
+  Decl box Box const
+    Call make
+      Const 1
+  Print
+    FieldOf hi
+      MemberCall wider
+        Var box
+        Const 5
+  Print
+    MemberCall wider
+      MemberCall wider
+        Call make
+          Const 7
+        Const 1
+      Const 1
+  Print
+    FieldOf x
+      MemberCall moved
+        FieldOf hi
+          MemberCall wider
+            Var box
+            Const 2
+        Const 3
+  Print
+    BinOp ==
+      FieldOf y
+        MemberCall moved
+          MemberCall moved
+            Var box.hi
+            Const 1
+          Const 1
+      Const 3
+  Decl f i32 const
+    MemberCall far
+      Var box.lo
+  If
+    BinOp ==
+      FieldOf lo.x
+        Call make
+          Const 2
+      Const 2
+    Block
+      Print "field of a result in a condition"
+  Print
+    Var box
+  Exit
+    Var f

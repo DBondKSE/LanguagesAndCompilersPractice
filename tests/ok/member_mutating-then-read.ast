@@ -1,0 +1,31 @@
+Program
+  Struct Counter
+    Field n i32 mut
+    MemberFn bump -> i32
+      Block
+        Assign n
+          BinOp +
+            Var n
+            Const 1
+        Exit
+          Var n
+  Decl c Counter mut
+    Const 0
+  Decl k i32 mut
+    Const 0
+  While
+    BinOp !=
+      Var k
+      Const 3
+    Block
+      Decl r i32 const
+        MemberCall bump
+          Var c
+      Assign k
+        BinOp +
+          Var k
+          Const 1
+  Print
+    Var c.n
+  Exit
+    Var c.n

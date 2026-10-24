@@ -1,0 +1,17 @@
+-9
+6000000000
+true
+false
+100% \n literal, with \t (tab) and 'quotes'
+
+Point{x: -9, y: 4}
+Point{x: -8, y: 4}
+in fn
+Info{ok: true, big: 5000000000, at: Point{x: 1, y: 1}}
+in fn
+Point{x: 2, y: 2}
+in member:
+-9
+first
+1
+Program exit with result -9

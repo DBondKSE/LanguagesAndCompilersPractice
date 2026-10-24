@@ -1,0 +1,55 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+    fn show := () -> i32
+    {
+        print("in member:")
+        print(x)
+        exit x
+    }
+    fn moved := (i32 dx) -> Point
+    {
+        Point q{x + dx, y}
+        exit q
+    }
+}
+struct Info
+{
+    bool ok
+    i64 big
+    Point at
+}
+fn make := (i32 v) -> Info
+{
+    print("in fn")
+    Info i{v == 1, 5000000000, {v, v}}
+    exit i
+}
+Point mut p{0 - 9, 4}
+print(p.x)
+print(6000000000)
+print(true)
+print(p.x == 3)
+print("100% \n literal, with \t (tab) and 'quotes'")
+print("")
+print(p)
+print(p.moved(1))
+print(make(1))
+Info info{make(2)}
+print(info.at)
+i32 s{p.show()}
+i32 mut k{0}
+while k != 2
+{
+    if k == 0
+    {
+        print("first")
+    }
+    else
+    {
+        print(k)
+    }
+    k := k + 1
+}
+exit s

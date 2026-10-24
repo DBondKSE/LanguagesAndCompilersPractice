@@ -24,7 +24,8 @@ class Parser {
   const token &expect_type(const std::string &what);
   void expect_end(const std::string &after = "the statement") const;
 
-  std::vector<Link> parse_links();
+  std::unique_ptr<ExprNode> parse_chain(const token &name);
+  std::vector<std::unique_ptr<ExprNode>> parse_args();
   std::unique_ptr<ExprNode> parse_factor();
   std::unique_ptr<ExprNode> parse_term();
   std::unique_ptr<ExprNode> parse_arith();
@@ -32,12 +33,13 @@ class Parser {
   token open_brace(const std::string &after);
   std::unique_ptr<FieldNode> parse_field();
   std::unique_ptr<StructNode> parse_struct();
-  std::unique_ptr<FnNode> parse_fn();
+  template <class Fn> std::unique_ptr<Fn> parse_fn();
   std::unique_ptr<InitNode> parse_init(const token &brace);
   std::unique_ptr<StmtNode> parse_decl();
   std::unique_ptr<StmtNode> parse_assign();
   std::unique_ptr<StmtNode> parse_if();
   std::unique_ptr<StmtNode> parse_while();
+  std::unique_ptr<StmtNode> parse_print();
   std::unique_ptr<BlockNode> parse_block(const std::string &after);
   std::unique_ptr<StmtNode> parse_statement();
   std::unique_ptr<ExitNode> parse_exit();

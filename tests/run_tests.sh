@@ -21,7 +21,9 @@ for src in tests/ok/*.txt; do
     continue
   fi
 
-  got=$(lli "$name.ll")
+  input=/dev/null
+  [ -f "$name.in" ] && input="$name.in"
+  got=$(lli "$name.ll" < "$input")
   want=$(cat "$name.expected")
   if [ "$got" = "$want" ]; then
     echo "ok   $src -> $got"

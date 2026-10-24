@@ -1,0 +1,46 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+    fn moved := (i32 dx) -> Point
+    {
+        Point q{x + dx, y}
+        exit q
+    }
+    fn shift := (i32 dx) -> i32
+    {
+        x := x + dx
+        exit x
+    }
+    fn far := () -> i32
+    {
+        exit moved(10).moved(20).shift(30)
+    }
+}
+struct Box
+{
+    Point lo
+    Point hi
+    fn wider := (i32 d) -> Box
+    {
+        Box b{lo, hi.moved(d)}
+        exit b
+    }
+}
+fn make := (i32 v) -> Box
+{
+    Box b{{v, v}, {v + 1, v + 2}}
+    exit b
+}
+Box box{make(1)}
+print(box.wider(5).hi)
+print(make(7).wider(1).wider(1))
+print(box.wider(2).hi.moved(3).x)
+print(box.hi.moved(1).moved(1).y == 3)
+i32 f{box.lo.far()}
+if make(2).lo.x == 2
+{
+    print("field of a result in a condition")
+}
+print(box)
+exit f

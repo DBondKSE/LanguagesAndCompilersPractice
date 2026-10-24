@@ -1,0 +1,34 @@
+Program
+  Struct Point
+    Field x i32 const
+    Field y i32 const
+  Struct Circle
+    Field center Point const
+    Field radius i32 const
+  Decl p Point const
+    Read
+    Read
+  Decl c Circle const
+    Var p
+    Const 2
+  Decl big i64 const
+    Const 3000000000
+  Print "p and c:"
+  Print
+    Var p
+  Print
+    Var c
+  Print
+    BinOp +
+      Var p.x
+      Var p.y
+  Print
+    BinOp *
+      Var big
+      Const 2
+  Print
+    BinOp ==
+      Var p.x
+      Const 3
+  Exit
+    Var c.radius

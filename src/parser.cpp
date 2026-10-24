@@ -60,13 +60,55 @@ void Parser::expect_end(const std::string &after) const {
           "unexpected " + describe(*tok) + " after " + after);
 }
 
-std::vector<Link> Parser::parse_links() {
+static std::unique_ptr<ExprNode> chain_end(const token &name,
+                                           std::unique_ptr<ExprNode> node,
+                                           std::vector<Link> links,
+                                           uint64_t dot_col) {
+  if (!node)
+    return std::make_unique<VarNode>(name.line, name.col, name.text,
+                                     std::move(links));
+  if (links.empty())
+    return node;
+  return std::make_unique<FieldOfNode>(name.line, dot_col, std::move(node),
+                                       std::move(links));
+}
+
+std::unique_ptr<ExprNode> Parser::parse_chain(const token &name) {
+  std::unique_ptr<ExprNode> node;
+  if (match(TK_SEPARATOR, "("))
+    node = std::make_unique<CallNode>(name.line, name.col, name.text,
+                                      parse_args());
   std::vector<Link> links;
-  while (match(TK_OPERATOR, ".")) {
+  uint64_t dot_col = 0;
+  const token *dot;
+  while ((dot = peek()) && is(*dot, TK_OPERATOR, ".")) {
+    eat();
+    if (links.empty())
+      dot_col = dot->col;
     const token &field = expect(TK_IDENT, "", "a field name");
-    links.push_back({field.text, field.col});
+    if (!match(TK_SEPARATOR, "(")) {
+      links.push_back({field.text, field.col});
+      continue;
+    }
+    std::unique_ptr<ExprNode> object =
+        chain_end(name, std::move(node), std::move(links), dot_col);
+    links.clear();
+    node = std::make_unique<MemberCallNode>(name.line, field.col,
+                                            std::move(object), dot->col,
+                                            field.text, parse_args());
   }
-  return links;
+  return chain_end(name, std::move(node), std::move(links), dot_col);
+}
+
+std::vector<std::unique_ptr<ExprNode>> Parser::parse_args() {
+  std::vector<std::unique_ptr<ExprNode>> args;
+  if (match(TK_SEPARATOR, ")"))
+    return args;
+  do
+    args.push_back(parse_expr());
+  while (match(TK_SEPARATOR, ","));
+  expect(TK_SEPARATOR, ")", "')'");
+  return args;
 }
 
 std::unique_ptr<ExprNode> Parser::parse_factor() {
@@ -85,19 +127,22 @@ std::unique_ptr<ExprNode> Parser::parse_factor() {
   }
   if (tok && tok->kind == TK_IDENT) {
     eat();
-    if (!match(TK_SEPARATOR, "("))
-      return std::make_unique<VarNode>(tok->line, tok->col, tok->text,
-                                       parse_links());
-    std::vector<std::unique_ptr<ExprNode>> args;
-    if (!match(TK_SEPARATOR, ")")) {
-      do
-        args.push_back(parse_expr());
-      while (match(TK_SEPARATOR, ","));
-      expect(TK_SEPARATOR, ")", "')'");
-    }
-    return std::make_unique<CallNode>(tok->line, tok->col, tok->text,
-                                      std::move(args));
+    return parse_chain(*tok);
   }
+  if (tok && is(*tok, TK_KEYWORD, "read")) {
+    eat();
+    expect(TK_SEPARATOR, "(", "'(' after 'read'");
+    const token *arg = peek();
+    if (arg && !is(*arg, TK_SEPARATOR, ")"))
+      error(arg->line, arg->col, "'read' takes no arguments");
+    expect(TK_SEPARATOR, ")", "')'");
+    return std::make_unique<ReadNode>(tok->line, tok->col);
+  }
+  if (tok && is(*tok, TK_KEYWORD, "print"))
+    error(tok->line, tok->col, "'print' is a statement and has no value");
+  if (tok && tok->kind == TK_STRING)
+    error(tok->line, tok->col,
+          "a string literal can only be the argument of 'print'");
   fail("expected a constant or a variable");
 }
 
@@ -184,33 +229,7 @@ std::unique_ptr<FieldNode> Parser::parse_field() {
                                      name.text, mut);
 }
 
-std::unique_ptr<StructNode> Parser::parse_struct() {
-  eat();
-  token name = expect(TK_IDENT, "", "a struct name");
-  expect_end("'" + name.text + "'");
-  token brace = open_brace("struct " + name.text);
-
-  std::vector<std::unique_ptr<FieldNode>> fields;
-  while (true) {
-    const std::vector<token> *line = peek_line();
-    if (!line)
-      error(brace.line, brace.col, "'{' is never closed");
-    if (is(line->front(), TK_BLOCK, "}"))
-      break;
-    next_line();
-    fields.push_back(parse_field());
-  }
-  next_line();
-  eat();
-  expect_end("'}'");
-
-  if (fields.empty())
-    error(brace.line, brace.col, "struct '" + name.text + "' has no fields");
-  return std::make_unique<StructNode>(name.line, name.col, name.text,
-                                      std::move(fields));
-}
-
-std::unique_ptr<FnNode> Parser::parse_fn() {
+template <class Fn> std::unique_ptr<Fn> Parser::parse_fn() {
   eat();
   token name = expect(TK_IDENT, "", "a function name");
   expect(TK_OPERATOR, ":=", "':=' after '" + name.text + "'");
@@ -233,9 +252,50 @@ std::unique_ptr<FnNode> Parser::parse_fn() {
   if (!body->exit)
     error(toks.front().line, toks.front().col,
           "function '" + name.text + "' must end with 'exit'");
-  return std::make_unique<FnNode>(name.line, name.col, name.text,
-                                  std::move(params), result.text, result.col,
-                                  std::move(body));
+  return std::make_unique<Fn>(name.line, name.col, name.text,
+                              std::move(params), result.text, result.col,
+                              std::move(body));
+}
+
+std::unique_ptr<StructNode> Parser::parse_struct() {
+  eat();
+  token name = expect(TK_IDENT, "", "a struct name");
+  expect_end("'" + name.text + "'");
+  token brace = open_brace("struct " + name.text);
+
+  std::vector<std::unique_ptr<FieldNode>> fields;
+  std::vector<std::unique_ptr<MemberFnNode>> methods;
+  while (true) {
+    const std::vector<token> *line = peek_line();
+    if (!line)
+      error(brace.line, brace.col, "'{' is never closed");
+    const token &first = line->front();
+    if (is(first, TK_BLOCK, "}"))
+      break;
+    next_line();
+    if (is(first, TK_KEYWORD, "fn")) {
+      if (fields.empty())
+        error(first.line, first.col,
+              "a member function cannot come before the first field of "
+              "struct '" +
+                  name.text + "'");
+      methods.push_back(parse_fn<MemberFnNode>());
+    } else {
+      if (!methods.empty())
+        error(first.line, first.col,
+              "a field cannot follow a member function in struct '" +
+                  name.text + "'");
+      fields.push_back(parse_field());
+    }
+  }
+  next_line();
+  eat();
+  expect_end("'}'");
+
+  if (fields.empty())
+    error(brace.line, brace.col, "struct '" + name.text + "' has no fields");
+  return std::make_unique<StructNode>(name.line, name.col, name.text,
+                                      std::move(fields), std::move(methods));
 }
 
 std::unique_ptr<InitNode> Parser::parse_init(const token &brace) {
@@ -266,10 +326,18 @@ std::unique_ptr<StmtNode> Parser::parse_decl() {
 
 std::unique_ptr<StmtNode> Parser::parse_assign() {
   const token &name = eat();
-  std::vector<Link> links = parse_links();
-  expect(TK_OPERATOR, ":=", "':=' after '" + chain(name.text, links) + "'");
+  std::unique_ptr<ExprNode> target = parse_chain(name);
+  VarNode *var = dynamic_cast<VarNode *>(target.get());
+  if (!var) {
+    const token *tok = peek();
+    if (tok && is(*tok, TK_OPERATOR, ":="))
+      error(name.line, name.col, "cannot assign to the result of a call");
+    error(name.line, name.col, "a call alone is not a statement");
+  }
+  expect(TK_OPERATOR, ":=",
+         "':=' after '" + chain(var->name, var->links) + "'");
   return std::make_unique<AssignNode>(name.line, name.col, name.text,
-                                      std::move(links), parse_expr());
+                                      std::move(var->links), parse_expr());
 }
 
 std::unique_ptr<BlockNode> Parser::parse_block(const std::string &after) {
@@ -332,6 +400,27 @@ std::unique_ptr<StmtNode> Parser::parse_while() {
                                      std::move(body));
 }
 
+std::unique_ptr<StmtNode> Parser::parse_print() {
+  token kw = eat();
+  expect(TK_SEPARATOR, "(", "'(' after 'print'");
+  const token *tok = peek();
+  if (tok && is(*tok, TK_SEPARATOR, ")"))
+    error(kw.line, kw.col, "'print' takes one argument, got none");
+  std::unique_ptr<ExprNode> value;
+  std::string text;
+  if (tok && tok->kind == TK_STRING) {
+    const std::string &literal = eat().text;
+    text = literal.substr(1, literal.size() - 2);
+  } else {
+    value = parse_expr();
+  }
+  tok = peek();
+  if (tok && is(*tok, TK_SEPARATOR, ","))
+    error(tok->line, tok->col, "'print' takes only one argument");
+  expect(TK_SEPARATOR, ")", "')'");
+  return std::make_unique<PrintNode>(kw.line, kw.col, std::move(value), text);
+}
+
 std::unique_ptr<StmtNode> Parser::parse_statement() {
   const token &tok = *peek();
   const token *second = peek(1);
@@ -343,12 +432,15 @@ std::unique_ptr<StmtNode> Parser::parse_statement() {
     expect_end();
     return decl;
   }
-  if (tok.kind == TK_IDENT && second && is(*second, TK_SEPARATOR, "("))
-    error(tok.line, tok.col, "a call alone is not a statement");
   if (tok.kind == TK_IDENT) {
     std::unique_ptr<StmtNode> assign = parse_assign();
     expect_end();
     return assign;
+  }
+  if (is(tok, TK_KEYWORD, "print")) {
+    std::unique_ptr<StmtNode> print = parse_print();
+    expect_end();
+    return print;
   }
   if (is(tok, TK_KEYWORD, "if"))
     return parse_if();
@@ -394,7 +486,7 @@ std::unique_ptr<ProgramNode> Parser::parse_program() {
       if (!statements.empty())
         error(first.line, first.col,
               "a function must be declared before the first statement");
-      functions.push_back(parse_fn());
+      functions.push_back(parse_fn<FnNode>());
     } else if (is(first, TK_KEYWORD, "exit")) {
       exit_node = parse_exit();
       expect_end();
