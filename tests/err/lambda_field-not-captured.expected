@@ -1,0 +1,1 @@
+compilation error: line 9:23: 'y' is not captured by lambda 'get': add it to the capture list, [y]

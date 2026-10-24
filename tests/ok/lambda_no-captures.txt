@@ -1,0 +1,20 @@
+fn sq := (i32 v) -> i32
+{
+    i32 r{v * v}
+    exit r
+}
+fn plus_one := [](i32 v) -> i32
+{
+    i32 r{sq(v) + 1}
+    exit r
+}
+if plus_one(2) == 5
+{
+    fn twice := [](i64 v) -> i64
+    {
+        i64 r{v * 2}
+        exit r
+    }
+    print(twice(3000000000))
+}
+exit plus_one(3)

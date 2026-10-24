@@ -1,0 +1,1 @@
+compilation error: line 15:8: cannot call 'b.ticks': its 'call' changes it, and field 'ticks' is not mut

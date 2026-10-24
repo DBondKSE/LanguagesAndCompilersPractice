@@ -1,0 +1,1 @@
+compilation error: line 22:1: cannot assign to 'add_k': it is a lambda, and a lambda cannot be assigned

@@ -27,6 +27,7 @@ class ReadNode;
 class PrintNode;
 class ConstNode;
 class BoolNode;
+class LambdaNode;
 
 class Visitor {
 public:
@@ -52,6 +53,7 @@ public:
   virtual void visit_print(PrintNode &node) = 0;
   virtual void visit_const(ConstNode &node) = 0;
   virtual void visit_bool(BoolNode &node) = 0;
+  virtual void visit_lambda(LambdaNode &node) = 0;
 };
 
 class Node {
@@ -120,11 +122,16 @@ public:
   std::string name;
   std::vector<Link> links;
   const DeclNode *decl = nullptr;
+  bool own_field = false;
   VarNode(uint64_t line, uint64_t col, std::string name,
           std::vector<Link> links)
       : ExprNode(line, col), name(std::move(name)), links(std::move(links)) {}
   void accept(Visitor &visitor) override { visitor.visit_var(*this); }
-  std::string label() const override { return "Var " + chain(name, links); }
+  std::string label() const override {
+    if (own_field)
+      return "Var " + chain(name, {links.begin() + 1, links.end()});
+    return "Var " + chain(name, links);
+  }
 };
 
 class CallNode : public ExprNode {
@@ -152,15 +159,20 @@ public:
   std::string name;
   std::vector<std::unique_ptr<ExprNode>> args;
   const MemberFnNode *fn = nullptr;
+  std::string callee;
   MemberCallNode(uint64_t line, uint64_t col, std::unique_ptr<ExprNode> object,
                  uint64_t dot_col, std::string name,
                  std::vector<std::unique_ptr<ExprNode>> args)
       : ExprNode(line, col), object(std::move(object)), dot_col(dot_col),
         name(std::move(name)), args(std::move(args)) {}
   void accept(Visitor &visitor) override { visitor.visit_member_call(*this); }
-  std::string label() const override { return "MemberCall " + name; }
+  std::string label() const override {
+    return callee.empty() ? "MemberCall " + name : "CallableCall " + callee;
+  }
   std::vector<const Node *> children() const override {
-    std::vector<const Node *> c = {object.get()};
+    std::vector<const Node *> c;
+    if (callee.empty())
+      c.push_back(object.get());
     for (const std::unique_ptr<ExprNode> &a : args)
       c.push_back(a.get());
     return c;
@@ -296,12 +308,15 @@ public:
   std::unique_ptr<ExprNode> value;
   const DeclNode *decl = nullptr;
   std::string type;
+  bool own_field = false;
   AssignNode(uint64_t line, uint64_t col, std::string name,
              std::vector<Link> links, std::unique_ptr<ExprNode> value)
       : StmtNode(line, col), name(std::move(name)), links(std::move(links)),
         value(std::move(value)) {}
   void accept(Visitor &visitor) override { visitor.visit_assign(*this); }
   std::string label() const override {
+    if (own_field)
+      return "Assign " + chain(name, {links.begin() + 1, links.end()});
     return "Assign " + chain(name, links);
   }
   std::vector<const Node *> children() const override {
@@ -460,6 +475,40 @@ public:
     for (const std::unique_ptr<MemberFnNode> &m : methods)
       c.push_back(m.get());
     return c;
+  }
+};
+
+struct Capture {
+  std::string name;
+  uint64_t line, col;
+  bool mut;
+};
+
+class LambdaNode : public StmtNode {
+public:
+  std::string name;
+  std::vector<Capture> captures;
+  std::unique_ptr<MemberFnNode> call;
+  std::unique_ptr<StructNode> closure;
+  std::unique_ptr<DeclNode> var;
+  LambdaNode(uint64_t line, uint64_t col, std::string name,
+             std::vector<Capture> captures, std::unique_ptr<MemberFnNode> call)
+      : StmtNode(line, col), name(std::move(name)),
+        captures(std::move(captures)), call(std::move(call)) {}
+  void accept(Visitor &visitor) override { visitor.visit_lambda(*this); }
+  std::string label() const override {
+    if (closure)
+      return "Lambda " + name + " -> " + closure->methods[0]->result_type;
+    std::string list;
+    for (const Capture &c : captures)
+      list += std::string(list.empty() ? "" : ", ") + (c.mut ? "mut " : "") +
+              c.name;
+    return "Lambda " + name + " [" + list + "] -> " + call->result_type;
+  }
+  std::vector<const Node *> children() const override {
+    if (closure)
+      return {closure.get(), var.get()};
+    return call->children();
   }
 };
 

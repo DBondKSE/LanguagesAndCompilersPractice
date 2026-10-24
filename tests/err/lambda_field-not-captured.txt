@@ -1,0 +1,16 @@
+struct Point
+{
+    i32 x
+    i32 y
+    fn sum := () -> i32
+    {
+        fn get := [x]() -> i32
+        {
+            i32 r{x + y}
+            exit r
+        }
+        exit get()
+    }
+}
+Point p{1, 2}
+exit p.sum()
