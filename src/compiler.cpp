@@ -13,16 +13,19 @@ int main(int argc, char **argv) {
   std::string mode = argc == 3 ? argv[1] : "";
   bool dumpTokens = mode == "--tokens";
   bool dumpAst = mode == "--ast";
+  bool dumpAstChecked = mode == "--ast-checked";
   bool checkOnly = mode == "--check";
   if (argc != 3) {
     std::cerr << "usage: " << argv[0] << " <source> <output.ll>\n"
               << "       " << argv[0] << " --tokens <source>\n"
               << "       " << argv[0] << " --ast <source>\n"
+              << "       " << argv[0] << " --ast-checked <source>\n"
               << "       " << argv[0] << " --check <source>\n";
     return 1;
   }
 
-  const char *srcPath = dumpTokens || dumpAst || checkOnly ? argv[2] : argv[1];
+  const char *srcPath =
+      dumpTokens || dumpAst || dumpAstChecked || checkOnly ? argv[2] : argv[1];
   std::ifstream in(srcPath, std::ios::binary);
   if (!in) {
     std::cerr << "error: cannot open " << srcPath << "\n";
@@ -44,6 +47,10 @@ int main(int argc, char **argv) {
 
   SemanticChecker checker;
   program->accept(checker);
+  if (dumpAstChecked) {
+    program->dump();
+    return 0;
+  }
   if (checkOnly)
     return 0;
 

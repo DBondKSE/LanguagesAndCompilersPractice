@@ -1,0 +1,1 @@
+compilation error: line 10:12: cannot assign to 'origin.y': field 'y' is not mut

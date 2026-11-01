@@ -1,0 +1,23 @@
+struct Acc
+{
+    i32 mut total
+    fn call := (i32 v) -> i32
+    {
+        total := total + v
+        exit total
+    }
+}
+i32 base{read()}
+fn add_base := [base](i32 v) -> i32
+{
+    i32 r{v + base}
+    exit r
+}
+Acc mut acc{0}
+i32 mut n{read()}
+while n != 0
+{
+    print(acc(add_base(read())))
+    n := n - 1
+}
+exit acc.total

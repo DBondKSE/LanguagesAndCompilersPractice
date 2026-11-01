@@ -1,0 +1,43 @@
+struct Point
+{
+    i32 x
+    i32 y
+    fn shifted := (i32 d) -> i32
+    {
+        fn by := [x, d](i32 m) -> i32
+        {
+            i32 r{x + d * m}
+            exit r
+        }
+        exit by(y)
+    }
+}
+fn base := (i32 b) -> i32
+{
+    fn by := [b](i32 m) -> i32
+    {
+        i32 r{b * m}
+        exit r
+    }
+    exit by(2)
+}
+Point p{3, 4}
+fn sum := [p](i32 extra) -> i32
+{
+    i32 r{p.x + p.y + extra}
+    exit r
+}
+fn twice := [sum](i32 v) -> i32
+{
+    fn inner := [sum, v]() -> i32
+    {
+        exit sum(v)
+    }
+    i32 r{inner() + sum(v)}
+    exit r
+}
+print(p.shifted(10))
+print(base(21))
+print(sum(0))
+print(twice(1))
+exit twice(0)

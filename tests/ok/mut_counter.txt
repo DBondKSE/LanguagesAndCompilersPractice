@@ -1,0 +1,27 @@
+fn count_to := (i32 limit) -> i32
+{
+    i32 start{0}
+    fn tick := [mut start]() -> i32
+    {
+        start := start + 1
+        exit start
+    }
+    i32 mut last{0}
+    while last != limit
+    {
+        last := tick()
+    }
+    exit tick()
+}
+i32 zero{0}
+fn counter := [mut zero]() -> i32
+{
+    zero := zero + 1
+    exit zero
+}
+while counter() != 3
+{
+    print("tick")
+}
+print(count_to(5))
+exit zero

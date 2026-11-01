@@ -1,0 +1,34 @@
+struct Range
+{
+    i32 lo
+    i32 hi
+    fn scaled := (i32 by) -> i32
+    {
+        fn scale := [by, lo](i32 v) -> i32
+        {
+            i32 r{v * by + lo}
+            exit r
+        }
+        exit scale(hi)
+    }
+}
+fn sum_to := (i32 n, Range r) -> i32
+{
+    i32 mut i{0}
+    i32 mut total{0}
+    while i != n
+    {
+        fn step := [i, r](i32 acc) -> i32
+        {
+            i32 s{acc + i + r.lo}
+            exit s
+        }
+        total := step(total)
+        i := i + 1
+    }
+    exit total
+}
+Range r{1, 5}
+print(r.scaled(10))
+print(sum_to(4, r))
+exit sum_to(3, r)

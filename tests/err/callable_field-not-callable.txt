@@ -1,0 +1,7 @@
+struct Shape
+{
+    i32 side
+    i32 k
+}
+Shape s{1, 2}
+exit s.k(3)

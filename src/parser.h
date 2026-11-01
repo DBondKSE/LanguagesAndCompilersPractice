@@ -34,6 +34,11 @@ class Parser {
   std::unique_ptr<FieldNode> parse_field();
   std::unique_ptr<StructNode> parse_struct();
   template <class Fn> std::unique_ptr<Fn> parse_fn();
+  template <class Fn>
+  std::unique_ptr<Fn> parse_signature(const token &name,
+                                      const std::string &after);
+  bool at_lambda() const;
+  std::unique_ptr<StmtNode> parse_lambda();
   std::unique_ptr<InitNode> parse_init(const token &brace);
   std::unique_ptr<StmtNode> parse_decl();
   std::unique_ptr<StmtNode> parse_assign();

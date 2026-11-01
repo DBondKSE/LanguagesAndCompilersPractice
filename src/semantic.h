@@ -18,8 +18,20 @@ class SemanticChecker : public Visitor {
   };
   std::vector<PendingCall> pending;
   bool mutation_known = false;
+  std::unique_ptr<ExprNode> replacement;
+  size_t barrier = 0;
+  const LambdaNode *current_lambda = nullptr;
+  const MemberFnNode *enclosing = nullptr;
+  std::vector<MemberFnNode *> lambdas;
+
+  bool visible_outside(const std::string &name) const;
+  [[noreturn]] void not_captured(const std::string &name,
+                                 const Node &at) const;
+  void reject_lambda(const ExprNode &value, const std::string &action,
+                     const std::string &holder) const;
 
   const std::string &check(ExprNode &node);
+  const std::string &check(std::unique_ptr<ExprNode> &slot);
   const DeclNode *find(const std::string &name) const;
   const DeclNode &lookup(const std::string &name, const Node &at) const;
   bool is_self(const DeclNode &decl) const;
@@ -74,4 +86,5 @@ public:
   void visit_print(PrintNode &node) override;
   void visit_const(ConstNode &node) override;
   void visit_bool(BoolNode &node) override;
+  void visit_lambda(LambdaNode &node) override;
 };

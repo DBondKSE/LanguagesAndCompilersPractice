@@ -15,6 +15,11 @@ for src in tests/ok/*.txt; do
     fail=$((fail + 1))
     continue
   fi
+  if [ -f "$name.ast-checked" ] && [ "$(./compiler --ast-checked "$src")" != "$(cat "$name.ast-checked")" ]; then
+    echo "FAIL $src: --ast-checked differs from $name.ast-checked"
+    fail=$((fail + 1))
+    continue
+  fi
   if ! ./compiler "$src" "$name.ll"; then
     echo "FAIL $src: compiler exited non-zero"
     fail=$((fail + 1))

@@ -1,0 +1,16 @@
+i32 n{0}
+fn next := [mut n]() -> i32
+{
+    n := n + 1
+    exit n
+}
+fn twice := [mut next]() -> i32
+{
+    i32 a{next()}
+    exit a
+}
+fn thrice := [twice]() -> i32
+{
+    exit twice()
+}
+exit thrice()

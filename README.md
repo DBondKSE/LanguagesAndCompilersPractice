@@ -103,6 +103,42 @@ This prints `Program exit with result 35`.
 - The object is passed by address, so a member function that assigns a field changes the caller's object
 - A member function is **mutating** if it assigns a field of its object, or calls a mutating member function on its object or one of its fields (worked out after all bodies are checked, so cycles are fine). A mutating function may be called only through a chain where every link is `mut`: the object and each field on the way. A parameter counts as not `mut`. A temporary call result can take any call
 
+### Callable objects
+
+A struct that declares a member function named `call` can be called like a function: `triple(14)` means `triple.call(14)`, and the longer form stays legal.
+
+- For `name(...)`, if `name` is a visible variable (a parameter, a local, or a field inside a member function), its type must be a struct with `call`; otherwise `name` is looked up as a function, as before
+- A name that is both a visible variable and a function cannot be called: `'twice' is both a variable and a function: rename one of them`. Declaring both is allowed
+- After a dot the same rule holds: if `scale` is a field of `s`, `s.scale(7)` is `s.scale.call(7)`; inside a member function, `scale(side)` calls the field of its own object
+- The call is checked like the member call it stands for: the arguments, and the mutation rule. With `Counter c{0}` whose `call` changes `n`, `c()` is an error
+- The semantic pass replaces the call with that member call, so both forms produce the same IR. `--ast` shows the parse tree (`Call triple`), `--ast-checked` the tree after the rewrite (`CallableCall triple`)
+
+### Lambdas
+
+A lambda is a function declared where a statement stands, together with copies of the variables it needs, its captures:
+
+```
+i32 mut k{10}
+fn add_k := [k](i32 y) -> i32
+{
+    i32 r{k + y}
+    exit r
+}
+k := 100
+print(add_k(5))
+exit add_k(1)
+```
+
+This prints `15` and `Program exit with result 11`.
+
+- `fn name := [captures](params) -> type`, then a block ending with `exit`. It stands at the top level among the statements and inside any block: a function, a member function, `if`, `while`, another lambda. `fn` without `[` inside a block is still an error, and so is a capture list on a member function
+- A capture is a copy taken at the declaration: changing the variable later does not change the lambda, and a lambda declared in a loop takes the current value on every iteration. Inside the body a capture is const unless it is written `[mut n]`
+- A `mut` capture is the lambda's own mutable copy: its field is `mut`, a `call` that assigns it is a mutating member function, and the lambda variable is `mut` so the call is allowed where it is declared. The copy lives in the lambda, so it keeps counting from call to call while the original variable never changes; a `mut` capture of a const variable is allowed. A captured lambda is const unless written `[mut next]`, and calling a mutating one through a const capture is an error: `cannot call 'next': its 'call' changes it, and the capture 'next' is const`
+- The body sees its parameters, its locals, its captures and the global functions. Nothing else: not the top-level variables, not the locals, parameters or fields around it, unless they are captured. A lambda cannot call itself, since its name is declared after its body; it may capture another lambda
+- A capture names a visible variable (a parameter, a local, a field inside a member function, or a capture of an enclosing lambda), at most once, and no parameter may share its name
+- A lambda's type has no name: it cannot be passed as an argument, be the value of `exit`, initialise a variable or a field, be assigned or be printed, and its captures are not visible outside its body (`add_k.k` is an error)
+- The semantic pass turns a lambda into a struct `lambda.add_k` with one field per capture, its member function `call`, and a variable `lambda.add_k add_k{k}`; `add_k(5)` is then a [callable object](#callable-objects). A dot cannot appear in a declared name, so the struct never clashes with one; two lambdas with the same name get `lambda.by` and `lambda.by.2`
+
 ### Input and output
 
 ```
@@ -141,6 +177,7 @@ With `3 4` on the standard input this prints `p is:`, `Point{x: 3, y: 4}`, `true
 - A nested `{}` is one struct value built with `insertvalue`
 - A function `name` becomes `@fn_name`, so it cannot clash with `main` or `printf`; its parameters are stored into slots in its entry block
 - A member function `shift` of `Point` becomes `@Point_shift(ptr %this, ...)`. A field in its body is a `getelementptr` on `%this`, so `x := x + dx` is a `getelementptr`, a `load`, an `add` and a `store`. A call passes the object's `alloca`, or a `getelementptr` into it for `c.center.d2()`
+- A lambda becomes the type `%"lambda.add_k" = type { i32 }` and the function `@"lambda.add_k_call"(ptr %this, ...)`; its declaration is an `alloca`, and a `getelementptr` and a `store` per capture
 - A field of a call result is read with `extractvalue`; for a member call on a call result, the result is stored into a temporary `alloca` whose address is passed as `%this`
 - `printf` is declared once and shared by `exit` and `print`; `scanf` is declared when `read()` is used and writes into an `alloca` in the entry block. Formats and texts are global constants: `"%d\n"` for `i32`, `"%lld\n"` for `i64`, `"%s\n"` with a `select` between `"true"` and `"false"` for `bool`, and `"%s\n"` for a literal
 - A struct is printed by walking its fields: `printf("Point{")`, then a `getelementptr`, a `load` and a `printf` with a format like `", y: %d"` per field (one level down for a struct field), then `printf("}")`
@@ -164,6 +201,7 @@ This produces the `compiler` binary.
 ./compiler program.txt output.ll   # compile to LLVM IR
 ./compiler --tokens program.txt    # print tokens
 ./compiler --ast program.txt       # print the AST
+./compiler --ast-checked program.txt # print the AST after the semantic pass
 ./compiler --check program.txt     # type-check only
 ```
 
@@ -190,6 +228,6 @@ Errors are reported as `compilation error: line L:C: <message>` and no output fi
 tests/run_tests.sh
 ```
 
-- `tests/ok/*.txt` must compile; the program's whole standard output (`print` lines and the exit line) is compared to the matching `.expected`, and the `--ast` dump to `.ast` when that file exists
+- `tests/ok/*.txt` must compile; the program's whole standard output (`print` lines and the exit line) is compared to the matching `.expected`, and the `--ast` and `--ast-checked` dumps to `.ast` and `.ast-checked` when those files exist
 - a program that calls `read()` keeps its input next to it in `NAME.in`, which is passed as the standard input
 - `tests/err/*.txt` must fail; the error message is compared to `.expected`

@@ -1,0 +1,15 @@
+fn run := () -> i32
+{
+    i32 n{0}
+    fn next := [mut n]() -> i32
+    {
+        n := n + 1
+        exit n
+    }
+    fn use := [next]() -> i32
+    {
+        exit next()
+    }
+    exit use()
+}
+exit run()

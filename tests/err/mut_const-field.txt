@@ -1,0 +1,17 @@
+struct Point
+{
+    i32 mut x
+    i32 y
+}
+i32 step{5}
+Point origin{0, 7}
+fn walk := [step, mut origin]() -> i32
+{
+    origin.y := origin.x + step
+    i32 r{origin.x + origin.y}
+    exit r
+}
+print(walk())
+print(walk())
+print(origin)
+exit walk()

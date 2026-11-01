@@ -1,0 +1,10 @@
+1
+2
+11
+12
+13
+Box{ticks: Counter{n: 13}, add: Add{base: 100}}
+11
+1003
+8
+Program exit with result 8

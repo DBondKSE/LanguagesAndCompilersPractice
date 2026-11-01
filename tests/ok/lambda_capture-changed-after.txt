@@ -1,0 +1,25 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+    fn sum := () -> i32
+    {
+        i32 r{x + y}
+        exit r
+    }
+}
+i32 mut k{1}
+Point mut p{2, 3}
+fn show := [k, p]() -> i32
+{
+    i32 r{k * 100 + p.sum()}
+    exit r
+}
+print(show())
+k := 7
+p.x := 40
+p.y := 50
+print(show())
+print(k)
+print(p)
+exit show()
