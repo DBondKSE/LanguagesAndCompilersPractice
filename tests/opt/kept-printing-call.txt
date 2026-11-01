@@ -1,0 +1,18 @@
+fn loud := (i32 a) -> i32
+{
+    print(a)
+    i32 unused{a + 1}
+    exit a
+}
+fn quiet := (i32 a) -> i32
+{
+    exit a
+}
+i32 a{loud(5)}
+i32 b{quiet(6) + 1}
+i32 mut c{0}
+c := loud(7)
+i32 mut d{0}
+d := 8
+i32 e{read()}
+exit 0

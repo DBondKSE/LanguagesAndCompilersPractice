@@ -1,0 +1,20 @@
+fn shout := (i32 a) -> i32
+{
+    print(a)
+    exit a
+}
+fn relay := (i32 a) -> i32
+{
+    exit shout(a)
+}
+fn pass := (i32 a) -> i32
+{
+    exit a
+}
+fn hand_on := (i32 a) -> i32
+{
+    exit pass(a)
+}
+i32 loud{relay(3)}
+i32 silent{hand_on(4)}
+exit 0

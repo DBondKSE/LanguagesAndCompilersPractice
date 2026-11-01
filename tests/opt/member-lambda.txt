@@ -1,0 +1,32 @@
+struct Counter
+{
+    i32 mut n
+
+    fn bump := () -> i32
+    {
+        i32 old{n}
+        i32 unused{old + 1}
+        n := n + 1
+        exit n
+    }
+}
+fn from_lambda := (i32 a) -> i32
+{
+    exit a
+}
+fn from_nowhere := (i32 a) -> i32
+{
+    exit a
+}
+i32 base{10}
+i32 other{20}
+fn add := [base](i32 y) -> i32
+{
+    i32 waste{y + y}
+    i32 s{base + y}
+    exit from_lambda(s)
+}
+Counter mut c{0}
+i32 t{c.bump()}
+print(c)
+exit add(1)

@@ -1,0 +1,30 @@
+Program
+  Fn ping i32
+    Param n i32
+    Block
+      Exit
+        Call pong
+          Var n
+  Fn pong i32
+    Param n i32
+    Block
+      Exit
+        Call ping
+          Var n
+  Fn countdown i32
+    Param n i32
+    Block
+      If
+        BinOp ==
+          Var n
+          Const 0
+        Block
+          Exit
+            Const 0
+      Exit
+        Call countdown
+          BinOp -
+            Var n
+            Const 1
+  Exit
+    Const 1

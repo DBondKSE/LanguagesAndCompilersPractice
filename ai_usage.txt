@@ -1,7 +1,4 @@
 Claude Code / Opus 5.5 used; Chat link unavailable, prompts used:
-1. Read @w08-practice.pdf, assess the needed changes:
-    Mandatory: Callable objects and Lambdas
-    Additional: Mut captures
-2. Ok. Start with updating EBNF according to the practice file.
-3. As in previous practices, write tests and run them only through llvm-practice docker container
-4. Review and clean up the done work, update README.md and run full test suite one last time
+1. Read @w09-practice.pdf, look over the files that require modifications to satisfy mandatory and additional task requirements.
+2. Check the correctness of the current codebase state, cover with tests according to task 3 and run them in llvm-practice docker container
+3. Review and clean up the done work, update README.md, remove the unnecessary artifacts from git.

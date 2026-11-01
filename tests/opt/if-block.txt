@@ -1,0 +1,21 @@
+i32 mut n{3}
+i32 mut total{0}
+if n == 3
+{
+    i32 tmp{n * 2}
+    i32 mut scratch{0}
+    scratch := tmp + 1
+}
+else
+{
+    i32 kept{n + 1}
+    total := kept
+}
+while n != 0
+{
+    i32 step{1}
+    i32 waste{step + n}
+    total := total + n
+    n := n - step
+}
+exit total

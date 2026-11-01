@@ -1,0 +1,20 @@
+Program
+  Fn loud i32
+    Param a i32
+    Block
+      Print
+        Var a
+      Exit
+        Var a
+  Decl a i32 const
+    Call loud
+      Const 5
+  Decl c i32 mut
+    Const 0
+  Assign c
+    Call loud
+      Const 7
+  Decl e i32 const
+    Read
+  Exit
+    Const 0

@@ -1,0 +1,25 @@
+fn ping := (i32 n) -> i32
+{
+    exit pong(n)
+}
+fn pong := (i32 n) -> i32
+{
+    exit ping(n)
+}
+fn countdown := (i32 n) -> i32
+{
+    if n == 0
+    {
+        exit 0
+    }
+    exit countdown(n - 1)
+}
+fn leaf := () -> i32
+{
+    exit 3
+}
+fn only_from_dead := () -> i32
+{
+    exit leaf()
+}
+exit 1
