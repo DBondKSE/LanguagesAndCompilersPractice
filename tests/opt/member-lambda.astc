@@ -1,0 +1,43 @@
+Program
+  Struct Counter
+    Field n i32 mut
+    MemberFn bump -> i32
+      Block
+        Assign n
+          BinOp +
+            Var n
+            Const 1
+        Exit
+          Var n
+  Fn from_lambda i32
+    Param a i32
+    Block
+      Exit
+        Var a
+  Decl base i32 const
+    Const 10
+  Lambda add -> i32
+    Struct lambda.add
+      Field base i32 const
+      MemberFn call -> i32
+        Param y i32
+        Block
+          Decl s i32 const
+            BinOp +
+              Var base
+              Var y
+          Exit
+            Call from_lambda
+              Var s
+    Decl add lambda.add const
+      Var base
+  Decl c Counter mut
+    Const 0
+  Decl t i32 const
+    MemberCall bump
+      Var c
+  Print
+    Var c
+  Exit
+    CallableCall add
+      Const 1

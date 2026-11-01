@@ -185,6 +185,69 @@ With `3 4` on the standard input this prints `p is:`, `Point{x: 3, y: 4}`, `true
 
 The full grammar is in [grammar.ebnf](grammar.ebnf).
 
+## Optimizations
+
+`--remove-unused` runs one more pass on the tree after the semantic pass has accepted the program and before code generation. It changes nothing the program prints, reads or exits with.
+
+### Unused variables
+
+- A variable is read where it stands in an initialiser, on the right of `:=`, in a condition, an argument, `print`, `exit`, at the start of a field chain, as the object of a member call, in a capture list, or as a callable object. The target of `:=` is not a read
+- Reads are counted per declaration, not per name, through the declaration the semantic pass resolved for each name: an inner `x` that shadows an outer one keeps only itself alive
+- A declaration with no reads is removed from its block together with every assignment to it; a removed initialiser may hold the only read of another variable, so the pass repeats until a round removes nothing
+- A declaration whose initialiser contains `read()` or a call of a function with an [effect](#calls-without-effects) stays, and so does an assignment whose value contains one, together with the declaration of its variable
+- Declarations at the top level, in `if` and `while` blocks, and in the bodies of functions, member functions and lambdas are removed. Parameters, fields and lambdas stay. A block left empty stays, and its condition is still evaluated
+
+### Unused functions
+
+- The same pass counts the calls of every global function, wherever the call stands: in the statements, in another function, in a member function, in a lambda body
+- A function with no calls is removed with its whole body; the body may have held the only call of another function, so the same loop repeats until a round removes neither a variable nor a function
+- Member functions and lambdas stay; only global functions are removed
+
+### Calls without effects
+
+Most calls print nothing and read nothing, so a value is kept for a call only if the function called has an effect:
+
+- its body contains `print` or `read()`
+- it is a mutating member function: it changes the object it is called on
+- it may not return: its body has a `while`, or it calls itself, directly or through other functions
+- it calls a function with an effect
+
+The last rule is circular when functions call each other, so the set is computed as a fixpoint: start from the first three rules and add callers until nothing changes. Global functions, member functions and the `call` of every lambda all take part; a lambda's body belongs to its `call`, not to the function it is declared in, and calling a callable object is a call of its `call`. The set is computed once, before the loop: removing a value without an effect never removes a call with one, and a removed function has no callers left.
+
+Removals now feed each other: with `i32 a{square(3)}` and `i32 b{quiet(4)}` where `quiet` only calls `square`, round 1 removes `a` and `b`, round 2 `quiet`, round 3 `square`. A call of a function with an effect keeps its whole value, even when that effect is only on a local object of the function called.
+
+### Limits
+
+- A variable that only feeds itself, `k := k + 1` with nobody else reading `k`, survives: the right side reads it. Counting cannot tell that the only reader is the variable's own assignment
+- A function that calls itself, or two that call only each other, never reach zero calls and stay: counting cannot see a cycle
+
+### Who frees a removed subtree
+
+The compiler is written in C++, which has no garbage collector and counts no references unless asked to. Every node owns its children through `std::unique_ptr`: a block holds its statements in a `std::vector<std::unique_ptr<StmtNode>>`, the program its functions the same way. A `unique_ptr` is the only owner, so there is no count to drop: the node is deleted when its owner is destroyed. The pruner builds a new list of the kept statements and move-assigns it over the old one; the old vector is destroyed on that line, and the `unique_ptr`s left in it delete the removed declarations and assignments, each taking its initialiser and values with it. A removed function goes the same way when `program.functions` is replaced. Everything is freed inside the pass, in the round that removes it.
+
+Nodes do not point to their parent; the one exception, a member function's `owner`, is a raw pointer. The links the semantic pass adds across the tree (`VarNode::decl`, `AssignNode::decl`, `CallNode::fn`) are raw pointers as well and own nothing. Under reference counting an owning parent pointer would make a cycle with the child's owning pointer, and a removed subtree would never reach zero; an owning `decl` would keep a declaration alive while any read still pointed to it. Here a declaration is removed only when no read points to it, and its assignments go in the same round, so no raw pointer is left dangling: the whole test suite run through `--remove-unused` under AddressSanitizer reports nothing.
+
+The measurement, [tests/free_check.cpp](tests/free_check.cpp), runs the pass on the first warm-up program under AddressSanitizer and asks whether the memory of the removed `x` and `y` is freed:
+
+```sh
+clang++ -std=c++17 -g -fsanitize=address src/lexer.cpp src/parser.cpp src/semantic.cpp src/optimizer.cpp src/error.cpp tests/free_check.cpp -o free_check
+./free_check
+```
+
+```
+before the pass: Decl x i32 const freed 0, Decl y i32 const freed 0
+after the pass: x freed 1, y freed 1, 1 statement left
+ERROR: AddressSanitizer: heap-use-after-free
+freed by thread T0 here:
+    DeclNode::~DeclNode() src/ast.h:268
+    std::unique_ptr<StmtNode>::~unique_ptr()
+    Pruner::prune(std::vector<std::unique_ptr<StmtNode>>&) src/optimizer.cpp:238
+    Pruner::prune(ProgramNode&)
+    remove_unused(ProgramNode&)
+```
+
+Its last line reads `y` once more on purpose, and AddressSanitizer names the line that freed it: `statements = std::move(kept)` in the pruner. This is the compiler's memory, not the compiled program's: the language has no heap, so nothing is freed in the binary.
+
 ## Building
 
 Requires `clang++` and LLVM (`llvm-config`, `llc`, `lli` on your `PATH`).
@@ -203,7 +266,11 @@ This produces the `compiler` binary.
 ./compiler --ast program.txt       # print the AST
 ./compiler --ast-checked program.txt # print the AST after the semantic pass
 ./compiler --check program.txt     # type-check only
+./compiler --remove-unused program.txt output.ll # compile the optimized tree
+./compiler --remove-unused --ast-checked program.txt # print the tree after the pass
 ```
+
+Flags may stand anywhere on the command line, before, after or between the paths.
 
 To compile and run in one step:
 
@@ -219,6 +286,7 @@ Errors are reported as `compilation error: line L:C: <message>` and no output fi
 - [src/lexer.cpp](src/lexer.cpp): tokenizer
 - [src/parser.cpp](src/parser.cpp): recursive-descent parser producing the AST in [src/ast.h](src/ast.h)
 - [src/semantic.cpp](src/semantic.cpp): type, mutability, field, call and member-function checks
+- [src/optimizer.cpp](src/optimizer.cpp): `--remove-unused`, the effect finder, the read counter and the pruner
 - [src/codegen.cpp](src/codegen.cpp): LLVM IR generation
 - [src/compiler.cpp](src/compiler.cpp): command-line entry point
 
@@ -226,8 +294,11 @@ Errors are reported as `compilation error: line L:C: <message>` and no output fi
 
 ```sh
 tests/run_tests.sh
+tests/run_tests.sh --remove-unused # compile every program through the pass
 ```
 
 - `tests/ok/*.txt` must compile; the program's whole standard output (`print` lines and the exit line) is compared to the matching `.expected`, and the `--ast` and `--ast-checked` dumps to `.ast` and `.ast-checked` when those files exist
 - a program that calls `read()` keeps its input next to it in `NAME.in`, which is passed as the standard input
 - `tests/err/*.txt` must fail; the error message is compared to `.expected`
+- `tests/opt/*.txt` test `--remove-unused`: the tree after the pass is compared to `NAME.astc`, and the program's output, compiled once without the flag and once with it, to `NAME.expected` both times
+- `--remove-unused` compiles every program of `tests/ok` and `tests/err` through the pass as well; each must still print the same output or report the same error
