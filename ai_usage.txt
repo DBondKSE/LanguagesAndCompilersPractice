@@ -1,4 +1,2 @@
-Claude Code / Opus 5.5 used; Chat link unavailable, prompts used:
-1. Read @w09-practice.pdf, look over the files that require modifications to satisfy mandatory and additional task requirements.
-2. Check the correctness of the current codebase state, cover with tests according to task 3 and run them in llvm-practice docker container
-3. Review and clean up the done work, update README.md, remove the unnecessary artifacts from git.
+None! 
+First practice with 0 ai used
